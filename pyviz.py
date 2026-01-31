@@ -1,12 +1,11 @@
 import sys
 import time
-import random
 import threading
-import math
 import traceback
 import shutil
 import os
 import json
+import argparse
 from logger import setup_logger
 
 logger = setup_logger("PyViz")
@@ -108,7 +107,11 @@ def run_controller():
     app.run()
 
 if __name__ == "__main__":
-    if "--engine" in sys.argv:
+    parser = argparse.ArgumentParser(description="PyViz Audio Visualizer")
+    parser.add_argument("--engine", action="store_true", help="Run the rendering engine directly")
+    args = parser.parse_args()
+
+    if args.engine:
         run_engine()
     else:
         run_controller()

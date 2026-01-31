@@ -48,7 +48,7 @@ def process_image(path: str, w: int, h: int) -> List[List[Tuple[str, Tuple[int, 
         if len(_IMG_CACHE) > 10: _IMG_CACHE.clear()
         _IMG_CACHE[key] = new_buf
         return new_buf
-    except: return []
+    except Exception: return []
 
 # Cached gradient calculation
 _GRADIENT_CACHE = {}
@@ -74,6 +74,9 @@ def col_style(fg: Tuple[int,int,int], bg: Tuple[int,int,int]=BLACK) -> Tuple[Tup
     return (fg, bg)
 
 class Star:
+    """
+    Represents a single star in the background starfield effect.
+    """
     def __init__(self) -> None:
         self.reset(True)
 
@@ -99,10 +102,14 @@ class Star:
                 if buf[fy][fx] == " ":
                     buf[fy][fx] = '.'
                     cbf[fy][fx] = col_style_fn((255, 255, 255))
-            except:
+            except Exception:
                 pass
 
 class Renderer:
+    """
+    Main visualization renderer using Rich.
+    Handles audio data processing, buffer generation, and drawing.
+    """
     def __init__(self) -> None:
         self.bands: Any = np.zeros(100) if np else []
         self.peak_heights: Any = np.zeros(100) if np else []

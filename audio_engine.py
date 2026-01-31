@@ -16,6 +16,9 @@ except (ImportError, OSError) as e:
     logger.critical(f"Audio libraries missing: {e}")
 
 class AudioPump(threading.Thread):
+    """
+    Handles audio input, FFT processing, and beat detection in a separate thread.
+    """
     def __init__(self) -> None:
         super().__init__()
         self.daemon = True
@@ -60,9 +63,9 @@ class AudioPump(threading.Thread):
                             return
                         else:
                             logger.warning(f"Device index {target_idx} mismatch. Expected {dev_name}, got {info['name']}. Fallback to search.")
-                    except:
+                    except Exception:
                         pass
-                except:
+                except Exception:
                     pass
 
             # Fallback: Search by name

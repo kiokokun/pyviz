@@ -12,58 +12,63 @@ from logger import setup_logger
 
 logger = setup_logger("TUI")
 
-class PyVizController(App):
-    engine_process = None
+# Extracted CSS for better readability
+MAIN_CSS = """
+Screen {
+    layout: vertical;
+    background: $surface-darken-1;
+}
+.box {
+    height: auto;
+    border: solid green;
+    margin: 1;
+    padding: 1;
+}
+Button {
+    width: 100%;
+    margin-top: 1;
+}
+Label {
+    margin-top: 1;
+}
+.control-row {
+    height: auto;
+    margin-bottom: 1;
+    align: center middle;
+}
+.control-label {
+    width: 50%;
+}
+Switch {
+    width: auto;
+}
+/* Compact adjustment row */
+.adjust-row {
+    height: auto;
+    align: center middle;
+    margin-top: 1;
+}
+.adjust-btn {
+    width: 4;
+    min-width: 4;
+}
+.adjust-input {
+    width: 1fr;
+    height: auto;
+    margin: 0 1;
+    text-align: center;
+}
+.input-error {
+    border: solid red;
+}
+"""
 
-    CSS = """
-    Screen {
-        layout: vertical;
-        background: $surface-darken-1;
-    }
-    .box {
-        height: auto;
-        border: solid green;
-        margin: 1;
-        padding: 1;
-    }
-    Button {
-        width: 100%;
-        margin-top: 1;
-    }
-    Label {
-        margin-top: 1;
-    }
-    .control-row {
-        height: auto;
-        margin-bottom: 1;
-        align: center middle;
-    }
-    .control-label {
-        width: 50%;
-    }
-    Switch {
-        width: auto;
-    }
-    /* Compact adjustment row */
-    .adjust-row {
-        height: auto;
-        align: center middle;
-        margin-top: 1;
-    }
-    .adjust-btn {
-        width: 4;
-        min-width: 4;
-    }
-    .adjust-input {
-        width: 1fr;
-        height: auto;
-        margin: 0 1;
-        text-align: center;
-    }
-    .input-error {
-        border: solid red;
-    }
+class PyVizController(App):
     """
+    Main TUI Controller for PyViz.
+    """
+    engine_process = None
+    CSS = MAIN_CSS
 
     TITLE = "PyViz Controller"
     SUB_TITLE = "Terminal Interface"
@@ -182,7 +187,7 @@ class PyVizController(App):
         try:
             with open(CONFIG_FILE, 'r') as f:
                 self.state = json.load(f)
-        except:
+        except Exception:
             self.state = DEFAULT_STATE.copy()
 
         # Update UI Elements
@@ -222,7 +227,7 @@ class PyVizController(App):
             with open(tmp_file, 'w') as f:
                 json.dump(self.state, f)
             os.replace(tmp_file, CONFIG_FILE)
-        except: pass
+        except Exception: pass
 
     # --- Event Handlers ---
 
