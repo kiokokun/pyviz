@@ -52,6 +52,21 @@ This document outlines a step-by-step plan to refactor, enhance, and modernize t
 - [x] Add "Matrix Rain" (Black background, multiple shades of Green) to `THEMES`.
 - [x] Add "Synthwave" (Purple/Pink/Orange) to `THEMES`.
 
+## Phase 2.5: Modernization (Robustness)
+**Goal:** Replace custom/brittle implementations with battle-tested libraries.
+
+### Step 2.5.1: Replace Custom Renderer with Rich
+- [ ] Update `renderer.py` to use `rich.live.Live` for the main loop.
+- [ ] Replace manual ANSI string concatenation with `rich.layout` or `rich.table`.
+- [ ] Use `rich.bar.Bar` or custom renderables for the spectrum bars.
+- [ ] This eliminates screen tearing and manual buffer management bugs.
+
+### Step 2.5.2: Replace Tkinter with Textual
+- [ ] Create `tui.py` using `textual` framework.
+- [ ] Reimplement the "Controller" window as a terminal UI app.
+- [ ] Advantages: Works over SSH, consistent dark theme, no X11 requirement on Linux.
+- [ ] Deprecate `tk` and `tkinter` imports.
+
 ## Phase 3: Web Controller
 **Goal:** Allow remote control via a browser.
 
