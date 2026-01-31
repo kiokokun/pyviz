@@ -6,29 +6,29 @@ This document outlines a step-by-step plan to refactor, enhance, and modernize t
 **Goal:** Break the monolithic `pyviz.py` into maintainable modules to support future features.
 
 ### Step 1.1: Configuration Extraction
-- [ ] Create `config.py`.
-- [ ] Move `DEFAULT_STATE` dictionary to `config.py`.
-- [ ] Move `THEMES` dictionary to `config.py`.
-- [ ] Move `FONT_MAP` and file path constants (`CONFIG_FILE`, `PRESETS_FILE`) to `config.py`.
-- [ ] Update `pyviz.py` to import these from `config`.
+- [x] Create `config.py`.
+- [x] Move `DEFAULT_STATE` dictionary to `config.py`.
+- [x] Move `THEMES` dictionary to `config.py`.
+- [x] Move `FONT_MAP` and file path constants (`CONFIG_FILE`, `PRESETS_FILE`) to `config.py`.
+- [x] Update `pyviz.py` to import these from `config`.
 
 ### Step 1.2: Audio Engine Extraction
-- [ ] Create `audio_engine.py`.
-- [ ] Move `AudioPump` class to `audio_engine.py`.
-- [ ] Add necessary imports (`threading`, `numpy`, `sounddevice`) to `audio_engine.py`.
-- [ ] Remove `AudioPump` from `pyviz.py` and import it from `audio_engine`.
-- [ ] Verify audio input still works.
+- [x] Create `audio_engine.py`.
+- [x] Move `AudioPump` class to `audio_engine.py`.
+- [x] Add necessary imports (`threading`, `numpy`, `sounddevice`) to `audio_engine.py`.
+- [x] Remove `AudioPump` from `pyviz.py` and import it from `audio_engine`.
+- [x] Verify audio input still works.
 
 ### Step 1.3: Renderer Refactoring
-- [ ] Create `renderer.py`.
-- [ ] Create a `Renderer` class to encapsulate the drawing logic (Screen size, buffers, helper functions like `get_gradient_color`).
-- [ ] Move `Star` class and `process_image` helper to `renderer.py`.
-- [ ] Move the main rendering loop logic (Stars, Bars, Text) into a `render_frame()` method in the `Renderer` class.
-- [ ] Update `pyviz.py` to use the `Renderer` class.
+- [x] Create `renderer.py`.
+- [x] Create a `Renderer` class to encapsulate the drawing logic (Screen size, buffers, helper functions like `get_gradient_color`).
+- [x] Move `Star` class and `process_image` helper to `renderer.py`.
+- [x] Move the main rendering loop logic (Stars, Bars, Text) into a `render_frame()` method in the `Renderer` class.
+- [x] Update `pyviz.py` to use the `Renderer` class.
 
 ### Step 1.4: Effects System
-- [ ] Create an `effects/` directory with an `__init__.py`.
-- [ ] Create `effects/base.py` defining an abstract `BaseEffect` class with `update(state, audio_data)` and `draw(buffer)` methods.
+- [x] Create an `effects/` directory with an `__init__.py`.
+- [x] Create `effects/base.py` defining an abstract `BaseEffect` class with `update(state, audio_data)` and `draw(buffer)` methods.
 - [ ] Refactor the current "Stars" logic into `effects/stars.py`.
 - [ ] Refactor the current "Spectrum Bars" logic into `effects/spectrum.py`.
 - [ ] Update the `Renderer` to hold a list of active effects and iterate through them.
