@@ -11,6 +11,10 @@ Here are the planned features and improvements for the Python Visualizer.
 
 ## Improvements
 - [ ] **Cross-Platform**: Further improve support for macOS and Linux (e.g., specific terminal handling).
+- [x] **Performance**: Optimize the rendering loop for higher FPS on lower-end hardware (Implemented RLE rendering and resolution scaling).
+- [ ] **Configuration**: Add a GUI for creating and saving custom color themes.
+- [x] **Error Handling**: Improve error messages and recovery when audio devices are disconnected.
+- [x] **Settings**: Expose all configuration options (Gravity, Smoothing, Mirror, Text, AFK) in the TUI.
 - [ ] **Performance**: Optimize the rendering loop for higher FPS on lower-end hardware.
 - [ ] **Configuration**: Add a GUI for creating and saving custom color themes.
 - [ ] **Error Handling**: Improve error messages and recovery when audio devices are disconnected.
@@ -23,3 +27,5 @@ Here are the planned features and improvements for the Python Visualizer.
 - [x] Refactor into modular architecture (`pyviz.py`, `config.py`, `audio_engine.py`, `renderer.py`, `tui.py`).
 - [x] Add detailed logging to `pyviz.log` for better diagnostics.
 - [x] Implement robust launcher scripts (`run_pyviz.bat`, `run_pyviz.sh`).
+- [x] Optimize rendering performance for fullscreen usage.
+- [x] Update TUI with Tabbed interface and full setting controls.

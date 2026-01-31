@@ -23,6 +23,7 @@ try:
 except ImportError:
     HAS_FIGLET = False
 
+# Helpers
 # Helpers (moved/adapted from original renderer)
 def process_image(path: str, w: int, h: int) -> List[List[Tuple[str, Tuple[int, int, int]]]]:
     if not path or not os.path.exists(path): return []
@@ -39,11 +40,26 @@ def process_image(path: str, w: int, h: int) -> List[List[Tuple[str, Tuple[int, 
         return new_buf
     except: return []
 
+# Cached gradient calculation
+_GRADIENT_CACHE = {}
+def get_gradient_color(y: int, h: int, start_rgb: Union[List[int], Tuple[int, int, int]], end_rgb: Union[List[int], Tuple[int, int, int]]) -> Tuple[int, int, int]:
+    # Ensure hashable keys (convert lists to tuples)
+    s_key = tuple(start_rgb)
+    e_key = tuple(end_rgb)
+    key = (y, h, s_key, e_key)
+
+    if key in _GRADIENT_CACHE: return _GRADIENT_CACHE[key]
+
 def get_gradient_color(y: int, h: int, start_rgb: Tuple[int, int, int], end_rgb: Tuple[int, int, int]) -> Tuple[int, int, int]:
     ratio = y / max(h, 1)
     r = int(start_rgb[0] + (end_rgb[0] - start_rgb[0]) * ratio)
     g = int(start_rgb[1] + (end_rgb[1] - start_rgb[1]) * ratio)
     b = int(start_rgb[2] + (end_rgb[2] - start_rgb[2]) * ratio)
+    res = (r, g, b)
+
+    if len(_GRADIENT_CACHE) > 2000: _GRADIENT_CACHE.clear()
+    _GRADIENT_CACHE[key] = res
+    return res
     return (r, g, b)
 
 class Star:
@@ -69,6 +85,7 @@ class Renderer:
         self.peak_heights: Any = np.zeros(100) if np else []
         self.stars_list: List[Star] = [Star() for _ in range(100)]
 
+        self.effects: List[Any] = [GlitchEffect()]
         self.effects: List[Any] = [GlitchEffect()] # Initialize effects
 
         self.buf_bg: List[List[Tuple[str, Tuple[int, int, int]]]] = []
@@ -77,6 +94,29 @@ class Renderer:
         self.last_h: int = 0
         self.console = Console()
 
+        # Max resolution to prevent lag on huge terminals
+        self.MAX_BARS = 160
+
+    def generate_frame(self, state: dict, audio: Any, console_w: int, h: int) -> Text:
+        if not np:
+            return Text("Numpy missing - Cannot render", style="bold red")
+
+        # Logic for downsampling / limiting bars
+        # If console width is huge, we calculate fewer bars and stretch them.
+        w = console_w
+        scale_x = 1
+
+        if w > self.MAX_BARS:
+            # e.g. w=200, MAX=160.
+            # We want to render self.MAX_BARS bars.
+            # But Rich Text needs full width.
+            # We can run logic at MAX_BARS resolution, then expand during Text build.
+            # Or simplified: if w > MAX_BARS, we set logical w = w // 2 (Double Width Mode)
+            # This is cleaner than arbitrary scaling.
+            scale_x = 2
+            w = console_w // 2
+
+        # D. Resize Buffers (Logical Width)
     def generate_frame(self, state: dict, audio: Any, w: int, h: int) -> Text:
         if not np:
             return Text("Numpy missing - Cannot render", style="bold red")
@@ -86,6 +126,7 @@ class Renderer:
             self.bands = np.zeros(w)
             self.peak_heights = np.zeros(w)
 
+        # E. Reload Images (Logical Width)
         # E. Reload Images if size changed
         if w != self.last_w or h != self.last_h:
             if state['img_bg_path']: self.buf_bg = process_image(state['img_bg_path'], w, h)
@@ -93,6 +134,19 @@ class Renderer:
             self.last_w, self.last_h = w, h
 
         # F. Process Audio Data
+        indices = np.linspace(0, 1023, w).astype(int)
+
+        if len(audio.raw_fft) == 1024:
+            raw_db = audio.raw_fft[indices]
+        else:
+            raw_db = np.zeros(w) - 100
+
+        norm = (raw_db - state['noise_floor']) / (0 - state['noise_floor'])
+        norm = np.clip(norm, 0, 1.0)
+
+        s = state.get('smoothing', 0.15)
+        self.bands = self.bands * s + norm * (1 - s)
+
         # Resample 1024 bins -> W columns
         indices = np.linspace(0, 1023, w).astype(int)
 
@@ -116,6 +170,8 @@ class Renderer:
         if state['auto_gain']:
             peak = np.max(self.bands)
             if peak > 0: agc = 1.0 / peak
+            agc = min(agc, 5.0)
+
             agc = min(agc, 5.0) # Cap gain
 
         # Final Height
@@ -130,6 +186,17 @@ class Renderer:
 
         # G. Drawing
         # Init buffers
+        # We reuse list creation logic (python lists are fast enough for <10k items)
+        # Type: List[List[str]]
+        buf = [[" " for _ in range(w)] for _ in range(h)]
+        # Type: List[List[Tuple[FG_RGB, BG_RGB]]]
+        cbf = [[((255,255,255), (0,0,0)) for _ in range(w)] for _ in range(h)]
+
+        # Optimize: Pre-define default black
+        BLACK = (0,0,0)
+        WHITE = (255,255,255)
+
+        def col_style(fg: Tuple[int,int,int], bg: Tuple[int,int,int]=BLACK) -> Tuple[Tuple[int,int,int], Tuple[int,int,int]]:
         # Type: List[List[str]]
         buf = [[" " for _ in range(w)] for _ in range(h)]
         # Type: List[List[Tuple[FG_RGB, BG_RGB]]]
@@ -142,6 +209,8 @@ class Renderer:
         if state['img_bg_on'] and self.buf_bg:
             for y in range(h):
                 for x in range(w):
+                    if y < len(self.buf_bg) and x < len(self.buf_bg[0]):
+                        res = self.buf_bg[y][x]
                     # Tiling check
                     if y < len(self.buf_bg) and x < len(self.buf_bg[0]):
                         res = self.buf_bg[y][x]
@@ -150,6 +219,7 @@ class Renderer:
                             cbf[y][x] = col_style(res[1])
                             buf[y][x] = res[0]
                         else:
+                            cbf[y][x] = col_style(WHITE, res[1])
                             cbf[y][x] = col_style((255,255,255), res[1])
                             buf[y][x] = " "
 
@@ -163,6 +233,69 @@ class Renderer:
         # Bars
         theme_t = THEMES.get(state['theme_name'], THEMES['Vaporeon'])
         chars = state['bar_chars']
+        style_mode = state['style']
+        peaks_on = state['peaks_on']
+        mirror = state['mirror']
+
+        # Pre-calc gradients for performance
+        row_colors = [get_gradient_color(h - 1 - y, h, theme_t[0], theme_t[1]) for y in range(h)]
+
+        for x in range(w):
+            bar_val = target_h[x]
+            peak_val = int(self.peak_heights[x])
+
+            # Optimization: only iterate Y where bars exist
+            # Max Y for this bar
+            max_y_bar = int(bar_val)
+            if max_y_bar >= h: max_y_bar = h - 1
+
+            # Fill Bar
+            # Because coordinates are y=0 (top) to h (bottom), we draw from bottom up.
+            # inv_y = 0 at bottom.
+            # Range of y to draw: h-1 down to h-1 - max_y_bar
+
+            start_y = h - 1
+            end_y = max(0, h - 1 - max_y_bar)
+
+            for y in range(end_y, start_y + 1):
+                inv_y = h - 1 - y
+                final_rgb = row_colors[y]
+
+                # FG Texture (if enabled, slow path)
+                if state['img_fg_on'] and self.buf_fg:
+                     if y < len(self.buf_fg) and x < len(self.buf_fg[0]):
+                         final_rgb = self.buf_fg[y][x][1]
+
+                if style_mode == 1: # Block
+                    cbf[y][x] = (WHITE, final_rgb) # BG color
+                    buf[y][x] = " "
+                else: # Char
+                    char_idx = int((inv_y/max(bar_val,1)) * (len(chars)-1))
+                    if char_idx >= len(chars): char_idx = len(chars)-1
+                    cbf[y][x] = (final_rgb, BLACK)
+                    buf[y][x] = chars[char_idx]
+
+            # Draw Peak
+            if peaks_on:
+                peak_y = h - 1 - peak_val
+                if 0 <= peak_y < h:
+                     cbf[peak_y][x] = (WHITE, (200,200,200))
+                     buf[peak_y][x] = " "
+
+        # Mirror (Post-Process)
+        if mirror:
+             # Split rendering? Or just copy left to right buffer?
+             # Simple approach: render full, but force symmetry?
+             # No, mirror usually means center outward.
+             # Doing this in drawing loop is complex.
+             # Post-process buffer:
+             mid = w // 2
+             for y in range(h):
+                 # Copy 0..mid to mid..w (reversed)
+                 left_part = buf[y][:mid]
+                 buf[y] = left_part + left_part[::-1]
+                 left_c = cbf[y][:mid]
+                 cbf[y] = left_c + left_c[::-1]
 
         for y in range(h):
             inv_y = h - 1 - y
@@ -204,6 +337,17 @@ class Renderer:
 
             sy = int(state['text_pos_y'] * (h - len(banner)))
             for i, l in enumerate(banner):
+                line_y = sy + i
+                if not (0 <= line_y < h): continue
+
+                # Center text
+                start_x = (w - len(l)) // 2
+                for j, c in enumerate(l):
+                    dx = start_x + j
+                    if 0 <= dx < w:
+                        if c != " ":
+                            cbf[line_y][dx] = (WHITE, BLACK)
+                            buf[line_y][dx] = c
                 for j, c in enumerate(l):
                     dx = int((w - len(l))/2) + j # Center
                     if 0 <= sy+i < h and 0 <= dx < w:
@@ -214,6 +358,62 @@ class Renderer:
         # Effects
         for effect in self.effects:
             effect.update(state, audio)
+            try: effect.draw(buf, cbf, w, h, col_style)
+            except: pass
+
+        # Build Rich Text (Optimized)
+        # Rich Text.append is slow.
+        # We can construct lines with shared styles.
+        screen_text = Text()
+
+        for y in range(h):
+            line = Text()
+
+            # Optimization: Run Length Encoding for styles
+            current_style = None
+            current_text = []
+
+            for x in range(w):
+                char = buf[y][x]
+                fg, bg = cbf[y][x]
+
+                # Simple style key
+                # Cache style strings?
+                # Using rgb values directly
+                style_key = (fg, bg)
+
+                if style_key != current_style:
+                    # Flush previous
+                    if current_text:
+                        s_fg, s_bg = current_style
+                        style_str = f"rgb({s_fg[0]},{s_fg[1]},{s_fg[2]})"
+                        if s_bg != BLACK:
+                            style_str += f" on rgb({s_bg[0]},{s_bg[1]},{s_bg[2]})"
+
+                        chunk = "".join(current_text)
+                        if scale_x > 1:
+                            # Expand horizontal pixels
+                            chunk = "".join([c * scale_x for c in chunk])
+
+                        line.append(chunk, style=style_str)
+
+                    current_style = style_key
+                    current_text = [char]
+                else:
+                    current_text.append(char)
+
+            # Flush last chunk
+            if current_text:
+                s_fg, s_bg = current_style
+                style_str = f"rgb({s_fg[0]},{s_fg[1]},{s_fg[2]})"
+                if s_bg != BLACK:
+                    style_str += f" on rgb({s_bg[0]},{s_bg[1]},{s_bg[2]})"
+
+                chunk = "".join(current_text)
+                if scale_x > 1:
+                    chunk = "".join([c * scale_x for c in chunk])
+                line.append(chunk, style=style_str)
+
 
             def dummy_col(rgb: Tuple[int,int,int]) -> Tuple[Tuple[int,int,int], Tuple[int,int,int]]:
                 return (rgb, (0,0,0))
@@ -246,6 +446,10 @@ class Renderer:
             while True:
                 # Update State
                 state = state_provider()
+
+                # Dimensions
+                w = self.console.width
+                h = self.console.height - 2
                 # Update Audio
                 # (Done in thread)
 
@@ -258,6 +462,7 @@ class Renderer:
 
                 # HUD
                 vol_bar = "#" * int(min(20, audio_provider.volume))
+                hud_text = Text(f"DEVICE: {audio_provider.connected_device:<30} | VOL: {vol_bar:<20} | STATE: {audio_provider.status} | FPS: 30", style="bold white on black")
                 hud_text = Text(f"DEVICE: {audio_provider.connected_device:<30} | VOL: {vol_bar:<20} | STATE: {audio_provider.status}", style="bold white on black")
 
                 # Layout
