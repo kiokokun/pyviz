@@ -67,8 +67,6 @@ class PyVizController(App):
                     yield Label("Theme")
                     yield Select([(k, k) for k in THEMES.keys()], id="theme_select")
 
-                yield Button(">>> LAUNCH ENGINE <<<", id="launch_btn", variant="success")
-
             with TabPane("Visuals", id="tab_visuals"):
                 with ScrollableContainer():
                     with Vertical(classes="box"):
@@ -136,6 +134,7 @@ class PyVizController(App):
                         yield Label("AFK Timeout (sec)")
                         yield Input(value="30", id="afk_timeout_input")
 
+        yield Button(">>> LAUNCH ENGINE <<<", id="launch_btn", variant="success")
         yield Footer()
 
     def on_mount(self) -> None:
