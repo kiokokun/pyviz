@@ -1,8 +1,13 @@
 import os
 import random
+import time
 from config import THEMES, FONT_MAP
 from effects.glitch import GlitchEffect
-# from effects.pulse import PulseEffect # Not fully implemented yet
+from rich.live import Live
+from rich.layout import Layout
+from rich.text import Text
+from rich.panel import Panel
+from rich.console import Console
 
 try:
     from PIL import Image
@@ -17,7 +22,7 @@ try:
 except ImportError:
     HAS_FIGLET = False
 
-# Helpers
+# Helpers (moved/adapted from original renderer)
 def process_image(path, w, h):
     if not path or not os.path.exists(path): return []
     if Image is None: return []
@@ -66,11 +71,11 @@ class Renderer:
         self.buf_fg = []
         self.last_w = 0
         self.last_h = 0
-        self.ESC = "\x1b"
+        self.console = Console()
 
-    def render(self, state, audio, w, h):
+    def generate_frame(self, state, audio, w, h):
         if not np:
-            return "Numpy missing - Cannot render"
+            return Text("Numpy missing - Cannot render", style="bold red")
 
         # D. Resize Buffers
         if len(self.bands) != w:
@@ -120,18 +125,28 @@ class Renderer:
             else: self.peak_heights[i] = max(0, self.peak_heights[i] - state['peak_gravity'])
 
         # G. Drawing
-        output = [f"{self.ESC}[H"]
+        # We will build a list of (text, style) tuples for each cell
+        # But for performance with Rich, it's better to build a Text object per line
 
-        # HUD
-        vol_bar = "#" * int(min(20, audio.volume))
-        hud_col = f"{self.ESC}[32m" if audio.volume > 0.1 else f"{self.ESC}[31m"
-        output.append(f"{self.ESC}[40m{hud_col}DEVICE: {audio.connected_device:<30} | VOL: {vol_bar:<20} | STATE: {audio.status} {self.ESC}[0m{self.ESC}[K")
+        # Pre-allocate generic buffers
+        # We store (char, (r,g,b)) or (char, None)
+        # Using a flat representation might be faster?
+        # Let's stick to the list of lists for logic compatibility then join
 
-        cbf = [[f"{self.ESC}[49m" for _ in range(w)] for _ in range(h)]
+        # cbf stores ANSI strings in old version. Here we store (r,g,b) tuples for FG
+        # and we need BG too.
+        # Rich Text can accept styles like "rgb(r,g,b) on rgb(r,g,b)"
+
+        # Logic:
+        # buf[y][x] = char
+        # cbf[y][x] = (fg_rgb, bg_rgb)
+
+        # Init buffers
         buf = [[" " for _ in range(w)] for _ in range(h)]
+        cbf = [[((255,255,255), (0,0,0)) for _ in range(w)] for _ in range(h)] # Default
 
-        def col(rgb): return f"{self.ESC}[38;2;{int(rgb[0])};{int(rgb[1])};{int(rgb[2])}m"
-        def bg(rgb): return f"{self.ESC}[48;2;{int(rgb[0])};{int(rgb[1])};{int(rgb[2])}m"
+        def col_style(fg, bg=(0,0,0)):
+            return (fg, bg)
 
         # BG Layer
         if state['img_bg_on'] and self.buf_bg:
@@ -140,14 +155,28 @@ class Renderer:
                     # Tiling check
                     if y < len(self.buf_bg) and x < len(self.buf_bg[0]):
                         res = self.buf_bg[y][x]
-                        cbf[y][x] = bg(res[1]) if state['style'] != 0 else col(res[1])
-                        buf[y][x] = " " if state['style'] != 0 else res[0]
+                        # res is (char, rgb)
+                        # style=0 -> char is " ", bg is rgb. style!=0 -> char is char, fg is rgb
+                        if state['style'] != 0:
+                            cbf[y][x] = col_style(res[1])
+                            buf[y][x] = res[0]
+                        else:
+                            cbf[y][x] = col_style((255,255,255), res[1])
+                            buf[y][x] = " "
 
         # Stars
         if state['stars']:
             for star in self.stars_list:
                 star.move(0.02 + (audio.volume * 0.01))
-                star.draw(buf, cbf, w, h, lambda c: col(c))
+                # star.draw adapted for Rich structure?
+                # Let's inline logic here or update Star class.
+                # Inline for now to avoid breaking old Star class yet
+                if star.z > 0:
+                    fx = int((star.x/star.z)*w*0.5+w/2); fy = int((star.y/star.z)*h*0.5+h/2)
+                    if 0<=fx<w and 0<=fy<h:
+                        if buf[fy][fx] == " ":
+                            buf[fy][fx] = '.'
+                            cbf[fy][fx] = col_style((255,255,255))
 
         # Bars
         theme_t = THEMES.get(state['theme_name'], THEMES['Vaporeon'])
@@ -171,14 +200,17 @@ class Renderer:
 
                     # Style
                     if state['style'] == 1: # Block
-                        cbf[y][x] = bg(final_rgb); buf[y][x] = " "
+                        cbf[y][x] = col_style((255,255,255), final_rgb) # BG color
+                        buf[y][x] = " "
                     else: # Char
                         char_idx = int((inv_y/max(bar_val,1)) * (len(chars)-1))
-                        cbf[y][x] = col(final_rgb); buf[y][x] = chars[char_idx]
+                        cbf[y][x] = col_style(final_rgb)
+                        buf[y][x] = chars[char_idx]
 
                 # Peak
                 if state['peaks_on'] and inv_y == int(self.peak_heights[x]):
-                    cbf[y][x] = f"{self.ESC}[47m"; buf[y][x] = " "
+                    cbf[y][x] = col_style((255,255,255), (200,200,200)) # White FG, Light Gray BG
+                    buf[y][x] = " "
 
         # Text Overlay
         if state['text_on']:
@@ -194,17 +226,77 @@ class Renderer:
                     dx = int((w - len(l))/2) + j # Center
                     if 0 <= sy+i < h and 0 <= dx < w:
                         if c != " ":
-                            cbf[sy+i][dx] = f"{self.ESC}[40m{self.ESC}[37m"; buf[sy+i][dx] = c
+                            cbf[sy+i][dx] = col_style((255,255,255), (0,0,0))
+                            buf[sy+i][dx] = c
 
         # Effects
+        # We need to adapt effects to work with this structure
+        # Passing 'color_func' that returns generic rgb helps?
+        # For now, let's manually apply glitch since it modifies chars
         for effect in self.effects:
             effect.update(state, audio)
-            effect.draw(buf, cbf, w, h, lambda rgb: f"{self.ESC}[38;2;{int(rgb[0])};{int(rgb[1])};{int(rgb[2])}m")
+            # Temporary adapter for effect drawing (specifically for GlitchEffect which modifies buf)
+            # GlitchEffect expects cbf to take ANSI strings, but here we use tuples.
+            # We can create a dummy wrapper or modify the effect.
+            # For this phase, since GlitchEffect mainly modifies 'buf' characters, we let it run
+            # but provide a dummy color func that returns the expected tuple format if it tries to set color.
 
-        # Flush
-        lines_out = []
+            def dummy_col(rgb): return (rgb, (0,0,0))
+
+            # Note: This is a partial implementation. Effects relying on complex ANSI codes
+            # will need a full rewrite for Rich compatibility in the future.
+            try:
+                effect.draw(buf, cbf, w, h, dummy_col)
+            except: pass
+
+        # Build Rich Text
+        # We join each line into a Text object
+        screen_text = Text()
         for y in range(h):
-            row = "".join([cbf[y][x] + buf[y][x] for x in range(w)])
-            lines_out.append(row + f"{self.ESC}[0m{self.ESC}[K")
+            line = Text()
+            for x in range(w):
+                char = buf[y][x]
+                fg, bg = cbf[y][x]
+                style = f"rgb({fg[0]},{fg[1]},{fg[2]})"
+                if bg != (0,0,0):
+                    style += f" on rgb({bg[0]},{bg[1]},{bg[2]})"
+                line.append(char, style=style)
+            screen_text.append(line)
+            screen_text.append("\n")
 
-        return "\n".join(output + lines_out)
+        return screen_text
+
+    def render_loop(self, state_provider, audio_provider):
+        """
+        Main loop using Rich Live
+        """
+        with Live(console=self.console, refresh_per_second=30, screen=True) as live:
+            while True:
+                # Update State
+                state = state_provider()
+                # Update Audio
+                # (Done in thread)
+
+                # Dimensions
+                w = self.console.width
+                h = self.console.height - 2 # Reserve space for HUD?
+
+                # Generate Frame
+                frame_text = self.generate_frame(state, audio_provider, w, h)
+
+                # HUD
+                vol_bar = "#" * int(min(20, audio_provider.volume))
+                hud_text = Text(f"DEVICE: {audio_provider.connected_device:<30} | VOL: {vol_bar:<20} | STATE: {audio_provider.status}", style="bold white on black")
+
+                # Layout
+                layout = Layout()
+                layout.split(
+                    Layout(hud_text, size=1),
+                    Layout(frame_text)
+                )
+
+                live.update(layout)
+
+                # FPS limiter handled by Live?
+                # Live tries to match refresh_per_second but we can sleep a tiny bit to yield
+                time.sleep(0.001)
