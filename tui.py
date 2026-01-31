@@ -60,6 +60,9 @@ class PyVizController(App):
         margin: 0 1;
         text-align: center;
     }
+    .input-error {
+        border: solid red;
+    }
     """
 
     TITLE = "PyViz Controller"
@@ -285,8 +288,13 @@ class PyVizController(App):
             except: pass
         # Numeric inputs
         elif iid == "sens_input":
-            try: self.state['sens'] = float(val)
-            except: pass
+            try:
+                self.state['sens'] = float(val)
+                # Clear error style if valid
+                self.query_one("#sens_input", Input).classes = "adjust-input"
+            except:
+                # Mark invalid
+                self.query_one("#sens_input", Input).classes = "adjust-input input-error"
         elif iid == "grav_input":
             try: self.state['gravity'] = float(val)
             except: pass

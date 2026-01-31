@@ -93,7 +93,15 @@ class AudioPump(threading.Thread):
         while self.running:
             try:
                 if self.device_index is None:
-                    time.sleep(1)
+                    # Wait for device selection
+                    time.sleep(0.5)
+                    # Check again if devices appeared (in case of empty list earlier)
+                    if self.sd:
+                        try:
+                            if len(self.sd.query_devices()) > 0:
+                                # Trigger auto-search again? For now just wait.
+                                pass
+                        except: pass
                     continue
 
                 if self.sd is None or self.np is None:
@@ -108,14 +116,22 @@ class AudioPump(threading.Thread):
                     self.status = "CONNECTED"
                     logger.info(f"Connected to {self.connected_device}")
 
-                    with self.sd.InputStream(device=self.device_index, channels=1, samplerate=rate, blocksize=2048) as stream:
+                    # Safe blocksize logic
+                    blocksize = 2048
+                    try:
+                        # Try to query device preferences?
+                        # For now, keep 2048 but allow failure to catch it.
+                        pass
+                    except: pass
+
+                    with self.sd.InputStream(device=self.device_index, channels=1, samplerate=rate, blocksize=blocksize) as stream:
                         while self.running and self.device_index is not None:
                             # Check stream status
                             if not stream.active:
                                 raise OSError("Stream inactive")
 
                             # READ RAW DATA
-                            data, overflow = stream.read(2048)
+                            data, overflow = stream.read(blocksize)
                             if overflow:
                                 logger.warning("Audio buffer overflow")
 

@@ -10,15 +10,21 @@ def setup_logger(name: str) -> logging.Logger:
 
     # Check if handlers already exist to avoid duplicates
     if not logger.handlers:
-        # File Handler with Rotation (max 5MB, 3 backups)
-        file_handler = logging.handlers.RotatingFileHandler(
-            LOG_FILE, maxBytes=5*1024*1024, backupCount=3
-        )
-        file_formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        file_handler.setFormatter(file_formatter)
-        logger.addHandler(file_handler)
+        try:
+            # File Handler with Rotation (max 5MB, 3 backups)
+            file_handler = logging.handlers.RotatingFileHandler(
+                LOG_FILE, maxBytes=5*1024*1024, backupCount=3
+            )
+            file_formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            )
+            file_handler.setFormatter(file_formatter)
+            logger.addHandler(file_handler)
+        except PermissionError:
+            # Fallback to null handler or stderr if file access denied
+            console = logging.StreamHandler()
+            logger.addHandler(console)
+            logger.error("Could not write to log file - Permission Denied.")
 
         # We generally don't want to log to stdout/stderr in the Engine because
         # it might interfere with the TUI or piped output, but for debugging we might.

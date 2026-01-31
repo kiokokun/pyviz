@@ -85,10 +85,22 @@ def run_engine():
 # ==========================================
 def run_controller():
     # Check dependencies before importing TUI
-    try:
-        import textual
-    except ImportError:
-        print("ERROR: 'textual' library not found. Please run 'pip install -r requirements.txt'")
+    missing = []
+    try: import textual
+    except ImportError: missing.append("textual")
+
+    try: import sounddevice
+    except ImportError: missing.append("sounddevice")
+
+    try: import numpy
+    except ImportError: missing.append("numpy")
+
+    try: import PIL
+    except ImportError: missing.append("Pillow")
+
+    if missing:
+        print(f"ERROR: Missing libraries: {', '.join(missing)}")
+        print("Please run 'pip install -r requirements.txt'")
         sys.exit(1)
 
     from tui import PyVizController

@@ -123,6 +123,9 @@ class Renderer:
         if not np:
             return Text("Numpy missing - Cannot render", style="bold red")
 
+        if h <= 0 or console_w <= 0:
+            return Text("")
+
         # Logic for downsampling / limiting bars
         # If console width is huge, we calculate fewer bars and stretch them.
         w = console_w
@@ -172,14 +175,18 @@ class Renderer:
             if peak > 0: agc = 1.0 / peak
             agc = min(agc, 5.0)
 
-        target_h = self.bands * h * agc * state['sens']
+        try:
+            target_h = self.bands * h * agc * float(state.get('sens', 1.0))
+        except (ValueError, TypeError):
+            target_h = self.bands * h * agc # Fallback
 
         # Physics
+        peak_g = float(state.get('peak_gravity', 0.15))
         for i in range(w):
             bh = target_h[i]
             if bh > h: bh = h
             if bh >= self.peak_heights[i]: self.peak_heights[i] = bh
-            else: self.peak_heights[i] = max(0, self.peak_heights[i] - state['peak_gravity'])
+            else: self.peak_heights[i] = max(0, self.peak_heights[i] - peak_g)
 
         # G. Drawing
         # Init buffers
