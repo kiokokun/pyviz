@@ -10,6 +10,8 @@ try:
     import numpy as np
     AUDIO_AVAILABLE = True
 except (ImportError, OSError) as e:
+    sd = None
+    np = None
     AUDIO_AVAILABLE = False
     logger.critical(f"Audio libraries missing: {e}")
 

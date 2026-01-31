@@ -17,3 +17,9 @@ Here are the planned features and improvements for the Python Visualizer.
 
 ## Bugs
 - [ ] Fix `start cmd` usage for non-Windows platforms (Partially addressed).
+- [x] Fix "filename, directory name, or volume label syntax is incorrect" on Windows by correcting quote handling in TUI launcher.
+
+## Completed
+- [x] Refactor into modular architecture (`pyviz.py`, `config.py`, `audio_engine.py`, `renderer.py`, `tui.py`).
+- [x] Add detailed logging to `pyviz.log` for better diagnostics.
+- [x] Implement robust launcher scripts (`run_pyviz.bat`, `run_pyviz.sh`).
