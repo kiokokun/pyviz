@@ -67,6 +67,15 @@ This document outlines a step-by-step plan to refactor, enhance, and modernize t
 - [ ] Advantages: Works over SSH, consistent dark theme, no X11 requirement on Linux.
 - [ ] Deprecate `tk` and `tkinter` imports.
 
+## Phase 2.6: Observability (Robustness)
+**Goal:** Improve debugging and monitoring capabilities.
+
+### Step 2.6.1: Logging System
+- [x] Create `logger.py` with rotating file handler (`pyviz.log`).
+- [x] Integrate logging into `audio_engine.py` (stream errors, device selection, overflows).
+- [x] Integrate logging into `pyviz.py` (lifecycle events, crashes).
+- [ ] Add debug logging to `renderer.py` (performance stats, resize events).
+
 ## Phase 3: Web Controller
 **Goal:** Allow remote control via a browser.
 

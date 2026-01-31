@@ -1,14 +1,17 @@
 import threading
 import time
 from typing import Optional, List, Any
+from logger import setup_logger
+
+logger = setup_logger("AudioEngine")
 
 try:
     import sounddevice as sd # type: ignore
     import numpy as np
     AUDIO_AVAILABLE = True
-except (ImportError, OSError):
+except (ImportError, OSError) as e:
     AUDIO_AVAILABLE = False
-    print("CRITICAL: AUDIO LIBS MISSING")
+    logger.critical(f"Audio libraries missing: {e}")
 
 class AudioPump(threading.Thread):
     def __init__(self) -> None:
@@ -43,9 +46,11 @@ class AudioPump(threading.Thread):
             if dev_name.startswith("["):
                 try:
                     self.device_index = int(dev_name.split("]")[0].replace("[", ""))
+                    logger.info(f"Selected device index: {self.device_index}")
                 except:
                     self.device_index = None
             else:
+                logger.info(f"Auto-selecting device (name: {dev_name})")
                 self.device_index = None # Auto-find later
 
     def run(self) -> None:
@@ -68,6 +73,7 @@ class AudioPump(threading.Thread):
                     rate = int(dev_info['default_samplerate'])
                     self.connected_device = f"{dev_info['name']} @ {rate}Hz"
                     self.status = "CONNECTED"
+                    logger.info(f"Connected to {self.connected_device}")
 
                     with self.sd.InputStream(device=self.device_index, channels=1, samplerate=rate, blocksize=2048) as stream:
                         while self.running and self.device_index is not None:
@@ -77,6 +83,9 @@ class AudioPump(threading.Thread):
 
                             # READ RAW DATA
                             data, overflow = stream.read(2048)
+                            if overflow:
+                                logger.warning("Audio buffer overflow")
+
                             if self.np.any(data):
                                 # Process FFT
                                 mono = data[:, 0]
@@ -117,10 +126,12 @@ class AudioPump(threading.Thread):
                                 self.is_beat = False
                 except (OSError, self.sd.PortAudioError) as e:
                     self.status = f"AUDIO ERROR: {str(e)[:15]}... RETRYING"
+                    logger.error(f"Audio stream error: {e}")
                     self.volume = 0.0
                     time.sleep(2) # Cooldown before reconnect
 
             except Exception as e:
                 self.status = f"CRITICAL: {str(e)[:20]}"
+                logger.critical(f"Unexpected error in audio loop: {e}", exc_info=True)
                 self.volume = 0.0
                 time.sleep(2)

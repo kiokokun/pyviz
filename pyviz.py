@@ -7,8 +7,9 @@ import traceback
 import shutil
 import os
 import json
-# import tkinter as tk
-# from tkinter import ttk, filedialog, colorchooser
+from logger import setup_logger
+
+logger = setup_logger("PyViz")
 
 # ==========================================
 # /// SYSTEM CORE ///
@@ -21,6 +22,7 @@ from renderer import Renderer
 # /// VISUALIZER RENDERER ///
 # ==========================================
 def run_engine():
+    logger.info("Starting Visualizer Engine")
     # 1. Start Audio Thread
     audio = AudioPump()
     audio.start()
@@ -58,8 +60,11 @@ def run_engine():
     try:
         renderer.render_loop(manager.get_state, audio)
     except KeyboardInterrupt:
+        logger.info("Engine stopped by user")
         sys.exit(0)
     except Exception as e:
+        logger.critical(f"Engine crash: {e}", exc_info=True)
+        # Fallback to simple file for catastrophic failure
         with open("error.log", "w") as f:
             f.write(traceback.format_exc())
 
