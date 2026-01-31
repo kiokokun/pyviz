@@ -15,9 +15,6 @@ Here are the planned features and improvements for the Python Visualizer.
 - [ ] **Configuration**: Add a GUI for creating and saving custom color themes.
 - [x] **Error Handling**: Improve error messages and recovery when audio devices are disconnected.
 - [x] **Settings**: Expose all configuration options (Gravity, Smoothing, Mirror, Text, AFK) in the TUI.
-- [ ] **Performance**: Optimize the rendering loop for higher FPS on lower-end hardware.
-- [ ] **Configuration**: Add a GUI for creating and saving custom color themes.
-- [ ] **Error Handling**: Improve error messages and recovery when audio devices are disconnected.
 
 ## Bugs
 - [ ] Fix `start cmd` usage for non-Windows platforms (Partially addressed).
