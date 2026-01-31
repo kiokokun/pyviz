@@ -142,7 +142,10 @@ class PyVizController(App):
         py_exe = sys.executable
 
         if os.name == 'nt':
-             subprocess.Popen(f'start "PyViz Engine" cmd /k "{py_exe}" "{cmd_path}" --engine', shell=True)
+             # Windows: start requires a title as the first quoted argument.
+             # cmd /k needs the entire command to be wrapped in quotes if it contains quotes
+             # to prevent it from stripping the first and last quote incorrectly.
+             subprocess.Popen(f'start "PyViz Engine" cmd /k ""{py_exe}" "{cmd_path}" --engine"', shell=True)
         else:
              terminals = ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm']
              term_cmd = None
@@ -151,7 +154,8 @@ class PyVizController(App):
                      if t == 'gnome-terminal':
                          term_cmd = [t, '--', py_exe, cmd_path, '--engine']
                      elif t == 'x-terminal-emulator' or t == 'xterm':
-                         term_cmd = [t, '-e', f'{py_exe} "{cmd_path}" --engine']
+                         # Ensure paths with spaces are quoted
+                         term_cmd = [t, '-e', f'"{py_exe}" "{cmd_path}" --engine']
                      elif t == 'konsole':
                           term_cmd = [t, '-e', py_exe, cmd_path, '--engine']
                      break
