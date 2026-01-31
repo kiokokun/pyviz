@@ -1,3 +1,0 @@
-2026-01-31 03:34:23,719 - AudioEngine - INFO - Selected device index: 1
-2026-01-31 03:34:23,720 - AudioEngine - INFO - Auto-selecting device (name: Default)
-2026-01-31 03:34:52,991 - AudioEngine - CRITICAL - Audio libraries missing: PortAudio library not found
