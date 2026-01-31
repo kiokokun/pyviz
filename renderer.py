@@ -200,7 +200,9 @@ class Renderer:
 
         # Bars
         theme_t = THEMES.get(state['theme_name'], THEMES['Vaporeon'])
-        chars = state['bar_chars']
+        chars = state.get('bar_chars', "")
+        if not chars: chars = "  ▂▃▄▅▆▇█" # Fallback to default if empty
+
         style_mode = state['style']
         peaks_on = state['peaks_on']
         mirror = state['mirror']
@@ -357,27 +359,33 @@ class Renderer:
         """
         with Live(console=self.console, refresh_per_second=30, screen=True) as live:
             while True:
-                # Update State
-                state = state_provider()
+                try:
+                    # Update State
+                    state = state_provider()
 
-                # Dimensions
-                w = self.console.width
-                h = self.console.height - 2
+                    # Dimensions
+                    w = self.console.width
+                    h = self.console.height - 2
 
-                # Generate Frame
-                frame_text = self.generate_frame(state, audio_provider, w, h)
+                    # Generate Frame
+                    frame_text = self.generate_frame(state, audio_provider, w, h)
 
-                # HUD
-                vol_bar = "#" * int(min(20, audio_provider.volume))
-                hud_text = Text(f"DEVICE: {audio_provider.connected_device:<30} | VOL: {vol_bar:<20} | STATE: {audio_provider.status} | FPS: 30", style="bold white on black")
+                    # HUD
+                    vol_bar = "#" * int(min(20, audio_provider.volume))
+                    hud_text = Text(f"DEVICE: {audio_provider.connected_device:<30} | VOL: {vol_bar:<20} | STATE: {audio_provider.status} | FPS: 30", style="bold white on black")
 
-                # Layout
-                layout = Layout()
-                layout.split(
-                    Layout(hud_text, size=1),
-                    Layout(frame_text)
-                )
+                    # Layout
+                    layout = Layout()
+                    layout.split(
+                        Layout(hud_text, size=1),
+                        Layout(frame_text)
+                    )
 
-                live.update(layout)
+                    live.update(layout)
+                except Exception as e:
+                    # Log error but don't crash
+                    error_text = Text(f"RENDER ERROR: {e}", style="bold red")
+                    live.update(Panel(error_text, title="Error"))
+                    time.sleep(1)
 
                 time.sleep(0.001)
