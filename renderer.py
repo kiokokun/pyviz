@@ -23,6 +23,11 @@ try:
 except ImportError:
     HAS_FIGLET = False
 
+# Global Constants
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+
+# Helpers
 # Helpers
 # Helpers (moved/adapted from original renderer)
 def process_image(path: str, w: int, h: int) -> List[List[Tuple[str, Tuple[int, int, int]]]]:
@@ -60,6 +65,9 @@ def get_gradient_color(y: int, h: int, start_rgb: Tuple[int, int, int], end_rgb:
     if len(_GRADIENT_CACHE) > 2000: _GRADIENT_CACHE.clear()
     _GRADIENT_CACHE[key] = res
     return res
+
+def col_style(fg: Tuple[int,int,int], bg: Tuple[int,int,int]=BLACK) -> Tuple[Tuple[int,int,int], Tuple[int,int,int]]:
+    return (fg, bg)
     return (r, g, b)
 
 class Star:
@@ -68,6 +76,7 @@ class Star:
     def move(self, spd: float) -> None:
         self.z -= spd
         if self.z <= 0.05: self.reset()
+    def draw(self, buf: List[List[str]], cbf: List[List[Tuple[Tuple[int,int,int], Tuple[int,int,int]]]], w: int, h: int, col_style_fn: Callable) -> None:
     # Updated draw signature to match Rich Renderer needs (modifying buffers directly)
     def draw(self, buf: List[List[str]], cbf: List[List[Tuple[Tuple[int,int,int], Tuple[int,int,int]]]], w: int, h: int, col_style: Callable) -> None:
         if self.z <= 0: return
@@ -76,6 +85,7 @@ class Star:
             try:
                 if buf[fy][fx] == " ":
                     buf[fy][fx] = '.'
+                    cbf[fy][fx] = col_style_fn((255,255,255))
                     cbf[fy][fx] = col_style((255,255,255))
             except: pass
 
@@ -190,6 +200,7 @@ class Renderer:
         # Type: List[List[str]]
         buf = [[" " for _ in range(w)] for _ in range(h)]
         # Type: List[List[Tuple[FG_RGB, BG_RGB]]]
+        cbf = [[(WHITE, BLACK) for _ in range(w)] for _ in range(h)]
         cbf = [[((255,255,255), (0,0,0)) for _ in range(w)] for _ in range(h)]
 
         # Optimize: Pre-define default black
