@@ -1,5 +1,5 @@
-CONFIG_FILE = "deck_settings.json"
-PRESETS_FILE = "deck_presets.json"
+CONFIG_FILE = "pyviz_settings.json"
+PRESETS_FILE = "pyviz_presets.json"
 
 DEFAULT_STATE = {
     "dev_name": "Default",

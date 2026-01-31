@@ -1,4 +1,4 @@
-# Detailed Improvement Plan for ULTRA_DECK REBORN
+# Detailed Improvement Plan for PyViz
 
 This document outlines a step-by-step plan to refactor, enhance, and modernize the visualizer.
 

@@ -22,9 +22,9 @@ from renderer import Renderer
 # ==========================================
 def run_engine():
     if os.name == 'nt':
-        os.system("title ULTRA_DECK REBORN")
+        os.system("title PyViz")
     else:
-        sys.stdout.write("\x1b]2;ULTRA_DECK REBORN\x07")
+        sys.stdout.write("\x1b]2;PyViz\x07")
     os.system("cls" if os.name=='nt' else "clear")
 
     # 1. Start Audio Thread
@@ -78,7 +78,7 @@ def run_controller():
         with open(CONFIG_FILE, 'w') as f: json.dump(DEFAULT_STATE, f)
     state = DEFAULT_STATE.copy()
 
-    root = tk.Tk(); root.title("ULTRA_DECK REBORN"); root.geometry("500x950"); root.configure(bg="#151515"); style = ttk.Style(); style.theme_use('clam')
+    root = tk.Tk(); root.title("PyViz Controller"); root.geometry("500x950"); root.configure(bg="#151515"); style = ttk.Style(); style.theme_use('clam')
 
     def save_state():
         try:
@@ -93,7 +93,7 @@ def run_controller():
 
         if os.name == 'nt':
              # "start" on Windows takes the first quoted argument as the window title
-             subprocess.Popen(f'start "ULTRA_DECK REBORN" cmd /k "{py_exe}" "{cmd_path}" --engine', shell=True)
+             subprocess.Popen(f'start "PyViz Engine" cmd /k "{py_exe}" "{cmd_path}" --engine', shell=True)
         else:
              # Try to find a terminal emulator
              terminals = ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm']
