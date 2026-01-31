@@ -42,6 +42,22 @@ class PyVizController(App):
     Switch {
         width: auto;
     }
+    /* Compact adjustment row */
+    .adjust-row {
+        height: auto;
+        align: center middle;
+        margin-top: 1;
+    }
+    .adjust-btn {
+        width: 4;
+        min-width: 4;
+    }
+    .adjust-input {
+        width: 1fr;
+        height: auto;
+        margin: 0 1;
+        text-align: center;
+    }
     """
 
     TITLE = "PyViz Controller"
@@ -59,10 +75,10 @@ class PyVizController(App):
 
                 with Vertical(classes="box"):
                     yield Label("Sensitivity")
-                    with Horizontal():
-                        yield Button("-", id="sens_down")
-                        yield Label("1.0", id="sens_val")
-                        yield Button("+", id="sens_up")
+                    with Horizontal(classes="adjust-row"):
+                        yield Button("-", id="sens_down", classes="adjust-btn")
+                        yield Input(value="1.0", id="sens_input", classes="adjust-input")
+                        yield Button("+", id="sens_up", classes="adjust-btn")
 
                     yield Label("Theme")
                     yield Select([(k, k) for k in THEMES.keys()], id="theme_select")
@@ -92,16 +108,16 @@ class PyVizController(App):
                         yield Label("Physics Settings")
 
                         yield Label("Gravity")
-                        with Horizontal():
-                            yield Button("-", id="grav_down")
-                            yield Label("0.25", id="grav_val")
-                            yield Button("+", id="grav_up")
+                        with Horizontal(classes="adjust-row"):
+                            yield Button("-", id="grav_down", classes="adjust-btn")
+                            yield Input(value="0.25", id="grav_input", classes="adjust-input")
+                            yield Button("+", id="grav_up", classes="adjust-btn")
 
                         yield Label("Smoothing")
-                        with Horizontal():
-                            yield Button("-", id="smooth_down")
-                            yield Label("0.15", id="smooth_val")
-                            yield Button("+", id="smooth_up")
+                        with Horizontal(classes="adjust-row"):
+                            yield Button("-", id="smooth_down", classes="adjust-btn")
+                            yield Input(value="0.15", id="smooth_input", classes="adjust-input")
+                            yield Button("+", id="smooth_up", classes="adjust-btn")
 
             with TabPane("Text & AFK", id="tab_text"):
                 with ScrollableContainer():
@@ -153,13 +169,11 @@ class PyVizController(App):
 
         # Update UI Elements
         # Main
-        self.query_one("#sens_val", Label).update(str(self.state.get('sens', 1.0)))
+        self.query_one("#sens_input", Input).value = str(self.state.get('sens', 1.0))
         theme_sel = self.query_one("#theme_select", Select)
         theme_sel.value = self.state.get('theme_name', 'Vaporeon')
 
         # Visuals
-        # Style logic: config stores 0, 1, 2. Select expects str value? No, value is whatever we passed.
-        # But Select values in constructor were strings.
         style_val = str(self.state.get('style', 2))
         self.query_one("#style_select", Select).value = style_val
         self.query_one("#bar_chars_input", Input).value = self.state.get('bar_chars', "  ▂▃▄▅▆▇█")
@@ -167,8 +181,8 @@ class PyVizController(App):
         self.query_one("#peaks_switch", Switch).value = self.state.get('peaks_on', True)
         self.query_one("#mirror_switch", Switch).value = self.state.get('mirror', False)
 
-        self.query_one("#grav_val", Label).update(str(self.state.get('gravity', 0.25)))
-        self.query_one("#smooth_val", Label).update(str(self.state.get('smoothing', 0.15)))
+        self.query_one("#grav_input", Input).value = str(self.state.get('gravity', 0.25))
+        self.query_one("#smooth_input", Input).value = str(self.state.get('smoothing', 0.15))
 
         # Text
         self.query_one("#text_input", Input).value = self.state.get('text_str', '')
@@ -197,27 +211,27 @@ class PyVizController(App):
             self.launch_engine()
         elif bid == "sens_up":
             self.state['sens'] = round(self.state.get('sens', 1.0) + 0.1, 1)
-            self.query_one("#sens_val", Label).update(str(self.state['sens']))
+            self.query_one("#sens_input", Input).value = str(self.state['sens'])
             self.save_state()
         elif bid == "sens_down":
             self.state['sens'] = round(max(0.1, self.state.get('sens', 1.0) - 0.1), 1)
-            self.query_one("#sens_val", Label).update(str(self.state['sens']))
+            self.query_one("#sens_input", Input).value = str(self.state['sens'])
             self.save_state()
         elif bid == "grav_up":
             self.state['gravity'] = round(min(1.0, self.state.get('gravity', 0.25) + 0.05), 2)
-            self.query_one("#grav_val", Label).update(str(self.state['gravity']))
+            self.query_one("#grav_input", Input).value = str(self.state['gravity'])
             self.save_state()
         elif bid == "grav_down":
             self.state['gravity'] = round(max(0.05, self.state.get('gravity', 0.25) - 0.05), 2)
-            self.query_one("#grav_val", Label).update(str(self.state['gravity']))
+            self.query_one("#grav_input", Input).value = str(self.state['gravity'])
             self.save_state()
         elif bid == "smooth_up":
             self.state['smoothing'] = round(min(0.95, self.state.get('smoothing', 0.15) + 0.05), 2)
-            self.query_one("#smooth_val", Label).update(str(self.state['smoothing']))
+            self.query_one("#smooth_input", Input).value = str(self.state['smoothing'])
             self.save_state()
         elif bid == "smooth_down":
             self.state['smoothing'] = round(max(0.05, self.state.get('smoothing', 0.15) - 0.05), 2)
-            self.query_one("#smooth_val", Label).update(str(self.state['smoothing']))
+            self.query_one("#smooth_input", Input).value = str(self.state['smoothing'])
             self.save_state()
 
     def on_select_changed(self, event: Select.Changed) -> None:
@@ -248,6 +262,16 @@ class PyVizController(App):
             self.state['afk_text'] = val
         elif iid == "afk_timeout_input":
             try: self.state['afk_timeout'] = int(val)
+            except: pass
+        # Numeric inputs
+        elif iid == "sens_input":
+            try: self.state['sens'] = float(val)
+            except: pass
+        elif iid == "grav_input":
+            try: self.state['gravity'] = float(val)
+            except: pass
+        elif iid == "smooth_input":
+            try: self.state['smoothing'] = float(val)
             except: pass
 
         self.save_state()
