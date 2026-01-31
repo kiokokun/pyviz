@@ -1,8 +1,6 @@
 from textual.app import App, ComposeResult
 from textual.containers import Vertical, Horizontal, ScrollableContainer
 from textual.widgets import Header, Footer, Button, Label, Select, Input, Static, TabbedContent, TabPane, Switch
-from textual.containers import Vertical, Horizontal
-from textual.widgets import Header, Footer, Button, Label, Select, Input, Static
 from textual.reactive import reactive
 import json
 import os
@@ -138,30 +136,6 @@ class PyVizController(App):
                         yield Label("AFK Timeout (sec)")
                         yield Input(value="30", id="afk_timeout_input")
 
-        with Vertical(classes="box"):
-            yield Label("Audio Source")
-            yield Select([], id="dev_select", prompt="Select Input Device")
-            yield Button("Refresh Devices", id="refresh_dev", variant="primary")
-
-        with Vertical(classes="box"):
-            yield Label("Sensitivity")
-            # Textual doesn't have a Slider widget built-in yet (in older versions),
-            # checking installed version capabilities or using buttons for now.
-            # We will use Input for precision or Buttons for +/-
-            with Horizontal():
-                yield Button("-", id="sens_down")
-                yield Label("1.0", id="sens_val")
-                yield Button("+", id="sens_up")
-
-            yield Label("Theme")
-            yield Select([(k, k) for k in THEMES.keys()], id="theme_select")
-
-        with Vertical(classes="box"):
-            yield Label("Overlay Text")
-            yield Input(placeholder="Enter text...", id="text_input")
-            yield Button("Toggle Text", id="toggle_text")
-
-        yield Button(">>> LAUNCH ENGINE <<<", id="launch_btn", variant="success")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -207,10 +181,6 @@ class PyVizController(App):
         self.query_one("#afk_text_input", Input).value = self.state.get('afk_text', 'brb')
         self.query_one("#afk_timeout_input", Input).value = str(self.state.get('afk_timeout', 30))
 
-        # Update UI
-        self.query_one("#sens_val", Label).update(str(self.state.get('sens', 1.0)))
-        self.query_one("#theme_select", Select).value = self.state.get('theme_name', 'Vaporeon')
-        self.query_one("#text_input", Input).value = self.state.get('text_str', '')
 
     def save_state(self):
         try:
@@ -295,35 +265,6 @@ class PyVizController(App):
         elif sid == "afk_switch": self.state['afk_enabled'] = val
 
         self.save_state()
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "refresh_dev":
-            self.refresh_devices()
-        elif event.button.id == "launch_btn":
-            self.launch_engine()
-        elif event.button.id == "sens_up":
-            self.state['sens'] = round(self.state.get('sens', 1.0) + 0.1, 1)
-            self.query_one("#sens_val", Label).update(str(self.state['sens']))
-            self.save_state()
-        elif event.button.id == "sens_down":
-            self.state['sens'] = round(max(0.1, self.state.get('sens', 1.0) - 0.1), 1)
-            self.query_one("#sens_val", Label).update(str(self.state['sens']))
-            self.save_state()
-        elif event.button.id == "toggle_text":
-            self.state['text_on'] = not self.state.get('text_on', True)
-            self.save_state()
-
-    def on_select_changed(self, event: Select.Changed) -> None:
-        if event.select.id == "theme_select" and event.value:
-            self.state['theme_name'] = str(event.value)
-            self.save_state()
-        elif event.select.id == "dev_select" and event.value:
-            self.state['dev_name'] = str(event.value)
-            self.save_state()
-
-    def on_input_changed(self, event: Input.Changed) -> None:
-        if event.input.id == "text_input":
-            self.state['text_str'] = event.value
-            self.save_state()
 
     def refresh_devices(self):
         try:
