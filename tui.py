@@ -8,6 +8,9 @@ import sys
 import shutil
 import subprocess
 from config import CONFIG_FILE, DEFAULT_STATE, THEMES
+from logger import setup_logger
+
+logger = setup_logger("TUI")
 
 class PyVizController(App):
     CSS = """
@@ -141,30 +144,40 @@ class PyVizController(App):
         cmd_path = os.path.abspath("pyviz.py") # Assume in same dir
         py_exe = sys.executable
 
-        if os.name == 'nt':
-             # Windows: start requires a title as the first quoted argument.
-             # cmd /k needs the entire command to be wrapped in quotes if it contains quotes
-             # to prevent it from stripping the first and last quote incorrectly.
-             subprocess.Popen(f'start "PyViz Engine" cmd /k ""{py_exe}" "{cmd_path}" --engine"', shell=True)
-        else:
-             terminals = ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm']
-             term_cmd = None
-             for t in terminals:
-                 if shutil.which(t):
-                     if t == 'gnome-terminal':
-                         term_cmd = [t, '--', py_exe, cmd_path, '--engine']
-                     elif t == 'x-terminal-emulator' or t == 'xterm':
-                         # Ensure paths with spaces are quoted
-                         term_cmd = [t, '-e', f'"{py_exe}" "{cmd_path}" --engine']
-                     elif t == 'konsole':
-                          term_cmd = [t, '-e', py_exe, cmd_path, '--engine']
-                     break
+        try:
+            if os.name == 'nt':
+                 # Windows: start requires a title as the first quoted argument.
+                 # cmd /k needs the entire command to be wrapped in quotes if it contains quotes
+                 # to prevent it from stripping the first and last quote incorrectly.
+                 # We wrap the command in outer quotes with spaces to ensure cmd processing preserves the inner quotes.
+                 cmd_str = f'start "PyViz Engine" cmd /k " "{py_exe}" "{cmd_path}" --engine "'
+                 logger.info(f"Launching on Windows with command: {cmd_str}")
+                 subprocess.Popen(cmd_str, shell=True)
+            else:
+                 terminals = ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm']
+                 term_cmd = None
+                 for t in terminals:
+                     if shutil.which(t):
+                         if t == 'gnome-terminal':
+                             term_cmd = [t, '--', py_exe, cmd_path, '--engine']
+                         elif t == 'x-terminal-emulator' or t == 'xterm':
+                             # Ensure paths with spaces are quoted
+                             term_cmd = [t, '-e', f'"{py_exe}" "{cmd_path}" --engine']
+                         elif t == 'konsole':
+                              term_cmd = [t, '-e', py_exe, cmd_path, '--engine']
+                         break
 
-             if term_cmd:
-                 subprocess.Popen(term_cmd)
-             else:
-                 self.notify("No terminal found. Running in background.", severity="warning")
-                 subprocess.Popen([py_exe, cmd_path, '--engine'])
+                 if term_cmd:
+                     logger.info(f"Launching on Linux/Mac with terminal command: {term_cmd}")
+                     subprocess.Popen(term_cmd)
+                 else:
+                     self.notify("No terminal found. Running in background.", severity="warning")
+                     bg_cmd = [py_exe, cmd_path, '--engine']
+                     logger.info(f"Launching in background (no terminal found): {bg_cmd}")
+                     subprocess.Popen(bg_cmd)
+        except Exception as e:
+            logger.error(f"Failed to launch engine: {e}", exc_info=True)
+            self.notify(f"Launch Error: {str(e)}", severity="error")
 
 if __name__ == "__main__":
     import shutil
