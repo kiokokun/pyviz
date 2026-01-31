@@ -13,6 +13,9 @@ from tkinter import ttk, filedialog, colorchooser
 # ==========================================
 # /// SYSTEM CORE ///
 # ==========================================
+from config import CONFIG_FILE, PRESETS_FILE, DEFAULT_STATE, THEMES, FONT_MAP
+from audio_engine import AudioPump
+from renderer import Renderer
 CONFIG_FILE = "deck_settings.json"
 PRESETS_FILE = "deck_presets.json"
 

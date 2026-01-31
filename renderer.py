@@ -1,6 +1,8 @@
 import os
 import random
 from config import THEMES, FONT_MAP
+from effects.glitch import GlitchEffect
+# from effects.pulse import PulseEffect # Not fully implemented yet
 
 try:
     from PIL import Image
@@ -57,6 +59,9 @@ class Renderer:
         self.bands = np.zeros(100) if np else []
         self.peak_heights = np.zeros(100) if np else []
         self.stars_list = [Star() for _ in range(100)]
+
+        self.effects = [GlitchEffect()] # Initialize effects
+
         self.buf_bg = []
         self.buf_fg = []
         self.last_w = 0
@@ -190,6 +195,11 @@ class Renderer:
                     if 0 <= sy+i < h and 0 <= dx < w:
                         if c != " ":
                             cbf[sy+i][dx] = f"{self.ESC}[40m{self.ESC}[37m"; buf[sy+i][dx] = c
+
+        # Effects
+        for effect in self.effects:
+            effect.update(state, audio)
+            effect.draw(buf, cbf, w, h, lambda rgb: f"{self.ESC}[38;2;{int(rgb[0])};{int(rgb[1])};{int(rgb[2])}m")
 
         # Flush
         lines_out = []

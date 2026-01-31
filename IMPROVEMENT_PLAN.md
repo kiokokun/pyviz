@@ -37,6 +37,20 @@ This document outlines a step-by-step plan to refactor, enhance, and modernize t
 **Goal:** Add more visual variety and responsiveness.
 
 ### Step 2.1: Advanced Beat Detection
+- [x] In `audio_engine.py`, implement a "Spectral Flux" algorithm or simple energy thresholding.
+- [x] Calculate the average energy of the lower frequencies (0-100Hz).
+- [x] Add a `is_beat` boolean to the `AudioPump` shared state, set to `True` for 1 frame when a beat is detected.
+- [x] Expose `beat_confidence` (0.0 to 1.0) for softer reactions.
+
+### Step 2.2: Reactive Effects
+- [x] Create `effects/pulse.py`: An effect that flashes the background color when `is_beat` is true.
+- [x] Create `effects/glitch.py`: An effect that randomly shifts characters or colors in the buffer when a strong bass hit occurs.
+- [x] Add configuration options to `config.py` to enable/disable these new effects.
+
+### Step 2.3: New Themes
+- [x] Add "Cyberpunk 2077" (Yellow/Black/Cyan) to `THEMES`.
+- [x] Add "Matrix Rain" (Black background, multiple shades of Green) to `THEMES`.
+- [x] Add "Synthwave" (Purple/Pink/Orange) to `THEMES`.
 - [ ] In `audio_engine.py`, implement a "Spectral Flux" algorithm or simple energy thresholding.
 - [ ] Calculate the average energy of the lower frequencies (0-100Hz).
 - [ ] Add a `is_beat` boolean to the `AudioPump` shared state, set to `True` for 1 frame when a beat is detected.

@@ -27,6 +27,12 @@ class AudioPump(threading.Thread):
         self.status = "IDLE"
         self.connected_device = "None"
 
+        # Beat Detection
+        self.is_beat = False
+        self.beat_confidence = 0.0
+        self.last_beat_time = 0
+        self.energy_history = []
+
         self.sd = sd if AUDIO_AVAILABLE else None
         self.np = np if AUDIO_AVAILABLE else None
 
@@ -66,6 +72,28 @@ class AudioPump(threading.Thread):
                             mono = data[:, 0]
                             self.volume = self.np.linalg.norm(mono) * 10 # Rough volume
 
+                            # Beat Detection (Simple Energy Based)
+                            # Focus on Bass frequencies (approx 20-150Hz)
+                            # Assuming 44.1kHz / 2048 samples -> ~21.5Hz per bin.
+                            # So bass is roughly first 10 bins
+                            bass_energy = self.np.sum(self.np.abs(mono)) # Simplified overall energy for now
+
+                            curr_time = time.time()
+                            self.energy_history.append(bass_energy)
+                            if len(self.energy_history) > 40: # ~1-2 seconds history
+                                self.energy_history.pop(0)
+
+                            avg_energy = sum(self.energy_history) / len(self.energy_history)
+
+                            # Threshold: Instant energy > 1.3x average
+                            if bass_energy > avg_energy * 1.4 and (curr_time - self.last_beat_time) > 0.3:
+                                self.is_beat = True
+                                self.beat_confidence = min(1.0, (bass_energy / (avg_energy + 1e-5)) - 1.0)
+                                self.last_beat_time = curr_time
+                            else:
+                                self.is_beat = False
+                                self.beat_confidence = max(0.0, self.beat_confidence * 0.8) # Decay
+
                             win = mono * self.np.hanning(len(mono))
                             fft = self.np.abs(self.np.fft.rfft(win))[:1024]
 
@@ -76,6 +104,7 @@ class AudioPump(threading.Thread):
                             self.raw_fft = db
                         else:
                             self.volume = 0.0
+                            self.is_beat = False
 
             except Exception as e:
                 self.status = f"ERROR: {str(e)[:20]}"
