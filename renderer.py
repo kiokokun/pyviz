@@ -12,6 +12,7 @@ from rich.console import Console
 
 try:
     from PIL import Image # type: ignore
+    from PIL import Image
     import numpy as np
 except ImportError:
     Image = None
@@ -19,12 +20,14 @@ except ImportError:
 
 try:
     import pyfiglet # type: ignore
+    import pyfiglet
     HAS_FIGLET = True
 except ImportError:
     HAS_FIGLET = False
 
 # Helpers (moved/adapted from original renderer)
 def process_image(path: str, w: int, h: int) -> List[List[Tuple[str, Tuple[int, int, int]]]]:
+def process_image(path, w, h):
     if not path or not os.path.exists(path): return []
     if Image is None: return []
     try:
@@ -40,6 +43,7 @@ def process_image(path: str, w: int, h: int) -> List[List[Tuple[str, Tuple[int, 
     except: return []
 
 def get_gradient_color(y: int, h: int, start_rgb: Tuple[int, int, int], end_rgb: Tuple[int, int, int]) -> Tuple[int, int, int]:
+def get_gradient_color(y, h, start_rgb, end_rgb):
     ratio = y / max(h, 1)
     r = int(start_rgb[0] + (end_rgb[0] - start_rgb[0]) * ratio)
     g = int(start_rgb[1] + (end_rgb[1] - start_rgb[1]) * ratio)
@@ -54,6 +58,12 @@ class Star:
         if self.z <= 0.05: self.reset()
     # Updated draw signature to match Rich Renderer needs (modifying buffers directly)
     def draw(self, buf: List[List[str]], cbf: List[List[Tuple[Tuple[int,int,int], Tuple[int,int,int]]]], w: int, h: int, col_style: Callable) -> None:
+    def __init__(self): self.reset(True)
+    def reset(self, rz=False): self.x=(random.random()-0.5)*2; self.y=(random.random()-0.5)*2; self.z=random.random()*2.0 if rz else 2.0
+    def move(self, spd):
+        self.z -= spd
+        if self.z <= 0.05: self.reset()
+    def draw(self, buf, cbf, w, h, cf):
         if self.z <= 0: return
         fx = int((self.x/self.z)*w*0.5+w/2); fy = int((self.y/self.z)*h*0.5+h/2)
         if 0<=fx<w and 0<=fy<h:
@@ -78,6 +88,24 @@ class Renderer:
         self.console = Console()
 
     def generate_frame(self, state: dict, audio: Any, w: int, h: int) -> Text:
+                if buf[fy][fx] == " ": buf[fy][fx] = '.'; cbf[fy][fx] = cf((255,255,255))
+            except: pass
+
+class Renderer:
+    def __init__(self):
+        self.bands = np.zeros(100) if np else []
+        self.peak_heights = np.zeros(100) if np else []
+        self.stars_list = [Star() for _ in range(100)]
+
+        self.effects = [GlitchEffect()] # Initialize effects
+
+        self.buf_bg = []
+        self.buf_fg = []
+        self.last_w = 0
+        self.last_h = 0
+        self.console = Console()
+
+    def generate_frame(self, state, audio, w, h):
         if not np:
             return Text("Numpy missing - Cannot render", style="bold red")
 
@@ -136,6 +164,27 @@ class Renderer:
         cbf = [[((255,255,255), (0,0,0)) for _ in range(w)] for _ in range(h)] # Default
 
         def col_style(fg: Tuple[int,int,int], bg: Tuple[int,int,int]=(0,0,0)) -> Tuple[Tuple[int,int,int], Tuple[int,int,int]]:
+        # We will build a list of (text, style) tuples for each cell
+        # But for performance with Rich, it's better to build a Text object per line
+
+        # Pre-allocate generic buffers
+        # We store (char, (r,g,b)) or (char, None)
+        # Using a flat representation might be faster?
+        # Let's stick to the list of lists for logic compatibility then join
+
+        # cbf stores ANSI strings in old version. Here we store (r,g,b) tuples for FG
+        # and we need BG too.
+        # Rich Text can accept styles like "rgb(r,g,b) on rgb(r,g,b)"
+
+        # Logic:
+        # buf[y][x] = char
+        # cbf[y][x] = (fg_rgb, bg_rgb)
+
+        # Init buffers
+        buf = [[" " for _ in range(w)] for _ in range(h)]
+        cbf = [[((255,255,255), (0,0,0)) for _ in range(w)] for _ in range(h)] # Default
+
+        def col_style(fg, bg=(0,0,0)):
             return (fg, bg)
 
         # BG Layer
@@ -146,6 +195,7 @@ class Renderer:
                     if y < len(self.buf_bg) and x < len(self.buf_bg[0]):
                         res = self.buf_bg[y][x]
                         # res is (char, rgb)
+                        # style=0 -> char is " ", bg is rgb. style!=0 -> char is char, fg is rgb
                         if state['style'] != 0:
                             cbf[y][x] = col_style(res[1])
                             buf[y][x] = res[0]
@@ -159,6 +209,15 @@ class Renderer:
                 star.move(0.02 + (audio.volume * 0.01))
                 if star.z > 0:
                     star.draw(buf, cbf, w, h, col_style)
+                # star.draw adapted for Rich structure?
+                # Let's inline logic here or update Star class.
+                # Inline for now to avoid breaking old Star class yet
+                if star.z > 0:
+                    fx = int((star.x/star.z)*w*0.5+w/2); fy = int((star.y/star.z)*h*0.5+h/2)
+                    if 0<=fx<w and 0<=fy<h:
+                        if buf[fy][fx] == " ":
+                            buf[fy][fx] = '.'
+                            cbf[fy][fx] = col_style((255,255,255))
 
         # Bars
         theme_t = THEMES.get(state['theme_name'], THEMES['Vaporeon'])
@@ -218,11 +277,27 @@ class Renderer:
             def dummy_col(rgb: Tuple[int,int,int]) -> Tuple[Tuple[int,int,int], Tuple[int,int,int]]:
                 return (rgb, (0,0,0))
 
+        # We need to adapt effects to work with this structure
+        # Passing 'color_func' that returns generic rgb helps?
+        # For now, let's manually apply glitch since it modifies chars
+        for effect in self.effects:
+            effect.update(state, audio)
+            # Temporary adapter for effect drawing (specifically for GlitchEffect which modifies buf)
+            # GlitchEffect expects cbf to take ANSI strings, but here we use tuples.
+            # We can create a dummy wrapper or modify the effect.
+            # For this phase, since GlitchEffect mainly modifies 'buf' characters, we let it run
+            # but provide a dummy color func that returns the expected tuple format if it tries to set color.
+
+            def dummy_col(rgb): return (rgb, (0,0,0))
+
+            # Note: This is a partial implementation. Effects relying on complex ANSI codes
+            # will need a full rewrite for Rich compatibility in the future.
             try:
                 effect.draw(buf, cbf, w, h, dummy_col)
             except: pass
 
         # Build Rich Text
+        # We join each line into a Text object
         screen_text = Text()
         for y in range(h):
             line = Text()
@@ -239,6 +314,7 @@ class Renderer:
         return screen_text
 
     def render_loop(self, state_provider: Callable, audio_provider: Any) -> None:
+    def render_loop(self, state_provider, audio_provider):
         """
         Main loop using Rich Live
         """
@@ -270,4 +346,6 @@ class Renderer:
                 live.update(layout)
 
                 # FPS limiter
+                # FPS limiter handled by Live?
+                # Live tries to match refresh_per_second but we can sleep a tiny bit to yield
                 time.sleep(0.001)

@@ -10,6 +10,8 @@ import json
 from logger import setup_logger
 
 logger = setup_logger("PyViz")
+# import tkinter as tk
+# from tkinter import ttk, filedialog, colorchooser
 
 # ==========================================
 # /// SYSTEM CORE ///
@@ -65,6 +67,8 @@ def run_engine():
     except Exception as e:
         logger.critical(f"Engine crash: {e}", exc_info=True)
         # Fallback to simple file for catastrophic failure
+        sys.exit(0)
+    except Exception as e:
         with open("error.log", "w") as f:
             f.write(traceback.format_exc())
 
