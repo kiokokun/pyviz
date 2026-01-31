@@ -152,6 +152,15 @@ def run_engine():
     audio = AudioPump()
     audio.start()
 
+    # 2. Setup Renderer
+    renderer = Renderer()
+
+    # 3. State Init
+    state = DEFAULT_STATE.copy()
+    last_load = 0
+
+    # 4. Main Loop
+    last_dev_name = ""
     # 2. Setup Libraries
     try:
         from PIL import Image
@@ -231,6 +240,10 @@ def run_engine():
             cols, lines = shutil.get_terminal_size()
             h = lines - 2; w = cols
 
+            # D. Render
+            output = renderer.render(state, audio, w, h)
+
+            sys.stdout.write(output)
             # D. Resize Buffers
             if len(bands) != w:
                 bands = np.zeros(w)
