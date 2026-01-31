@@ -47,7 +47,6 @@ THEMES = {
     "Cyberpunk 2077": ([255, 200, 0], [0, 255, 255]), # Yellow to Cyan
     "Matrix Rain": ([0, 20, 0], [0, 255, 50]), # Dark Green to Bright Green
     "Synthwave": ([80, 0, 120], [255, 100, 0]), # Purple to Orange
-    "Sky": ([0, 100, 255], [255, 255, 255])
 }
 
 FONT_MAP = {"Tiny":"term", "Standard":"standard", "Big":"big", "Slant":"slant", "Block":"block", "Lean":"lean"}
