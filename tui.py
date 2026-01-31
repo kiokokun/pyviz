@@ -13,6 +13,8 @@ from logger import setup_logger
 logger = setup_logger("TUI")
 
 class PyVizController(App):
+    engine_process = None
+
     CSS = """
     Screen {
         layout: vertical;
@@ -158,6 +160,13 @@ class PyVizController(App):
 
         yield Button(">>> LAUNCH ENGINE <<<", id="launch_btn", variant="success")
         yield Footer()
+
+    def on_unmount(self) -> None:
+        if self.engine_process:
+            try:
+                self.engine_process.terminate()
+                logger.info("Terminated engine subprocess on exit.")
+            except: pass
 
     def on_mount(self) -> None:
         self.load_state()
@@ -329,6 +338,12 @@ class PyVizController(App):
         py_exe = sys.executable
 
         try:
+            # Check if previous exists
+            if self.engine_process:
+                if self.engine_process.poll() is None:
+                    self.notify("Engine already running!", severity="warning")
+                    return
+
             if os.name == 'nt':
                  # Windows: start requires a title as the first quoted argument.
                  # cmd /k needs the entire command to be wrapped in quotes if it contains quotes
@@ -336,6 +351,8 @@ class PyVizController(App):
                  # We wrap the command in outer quotes with spaces to ensure cmd processing preserves the inner quotes.
                  cmd_str = f'start "PyViz Engine" cmd /k " "{py_exe}" "{cmd_path}" --engine "'
                  logger.info(f"Launching on Windows with command: {cmd_str}")
+                 # For Windows 'start', we can't track the PID easily because 'start' exits immediately.
+                 # So we rely on manual closing.
                  subprocess.Popen(cmd_str, shell=True)
             else:
                  terminals = ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm']
@@ -353,12 +370,13 @@ class PyVizController(App):
 
                  if term_cmd:
                      logger.info(f"Launching on Linux/Mac with terminal command: {term_cmd}")
-                     subprocess.Popen(term_cmd)
+                     # If we launch a terminal, that terminal is the child.
+                     self.engine_process = subprocess.Popen(term_cmd)
                  else:
                      self.notify("No terminal found. Running in background.", severity="warning")
                      bg_cmd = [py_exe, cmd_path, '--engine']
                      logger.info(f"Launching in background (no terminal found): {bg_cmd}")
-                     subprocess.Popen(bg_cmd)
+                     self.engine_process = subprocess.Popen(bg_cmd)
         except Exception as e:
             logger.error(f"Failed to launch engine: {e}", exc_info=True)
             self.notify(f"Launch Error: {str(e)}", severity="error")

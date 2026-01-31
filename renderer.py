@@ -296,8 +296,13 @@ class Renderer:
             txt = state['text_str']
             banner = [txt]
             if HAS_FIGLET:
-                try: banner = pyfiglet.figlet_format(txt, font=FONT_MAP.get(state['text_font'], 'standard')).split('\n')
-                except: pass
+                try:
+                    font = FONT_MAP.get(state['text_font'], 'standard')
+                    banner = pyfiglet.figlet_format(txt, font=font).split('\n')
+                except Exception as e:
+                    # Font not found fallback
+                    try: banner = pyfiglet.figlet_format(txt, font='standard').split('\n')
+                    except: pass
 
             sy = int(state['text_pos_y'] * (h - len(banner)))
             for i, l in enumerate(banner):

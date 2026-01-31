@@ -23,8 +23,18 @@ from renderer import Renderer
 # ==========================================
 def run_engine():
     logger.info("Starting Visualizer Engine")
+
     # 1. Start Audio Thread
     audio = AudioPump()
+
+    # Ensure audio stops on exit
+    import atexit
+    def cleanup():
+        logger.info("Stopping audio thread...")
+        audio.running = False
+        audio.join(timeout=1.0)
+    atexit.register(cleanup)
+
     audio.start()
 
     # 2. Setup Renderer
@@ -67,12 +77,20 @@ def run_engine():
         # Fallback to simple file for catastrophic failure
         with open("error.log", "w") as f:
             f.write(traceback.format_exc())
+    finally:
+        cleanup()
 
 # ==========================================
 # /// CONTROLLER ///
 # ==========================================
 def run_controller():
-    # Deprecated Tkinter controller replaced by TUI
+    # Check dependencies before importing TUI
+    try:
+        import textual
+    except ImportError:
+        print("ERROR: 'textual' library not found. Please run 'pip install -r requirements.txt'")
+        sys.exit(1)
+
     from tui import PyVizController
     app = PyVizController()
     app.run()
