@@ -47,13 +47,44 @@ class AudioPump(threading.Thread):
             # Parse ID if present "[81] Name"
             if dev_name.startswith("["):
                 try:
-                    self.device_index = int(dev_name.split("]")[0].replace("[", ""))
-                    logger.info(f"Selected device index: {self.device_index}")
+                    idx_str = dev_name.split("]")[0].replace("[", "")
+                    target_idx = int(idx_str)
+
+                    # Verify if device at this index matches the name (roughly)
+                    # This prevents index shifting issues
+                    try:
+                        info = self.sd.query_devices(target_idx)
+                        if info['name'] in dev_name:
+                            self.device_index = target_idx
+                            logger.info(f"Selected device index: {self.device_index}")
+                            return
+                        else:
+                            logger.warning(f"Device index {target_idx} mismatch. Expected {dev_name}, got {info['name']}. Fallback to search.")
+                    except:
+                        pass
                 except:
-                    self.device_index = None
-            else:
-                logger.info(f"Auto-selecting device (name: {dev_name})")
-                self.device_index = None # Auto-find later
+                    pass
+
+            # Fallback: Search by name
+            logger.info(f"Searching for device: {dev_name}")
+            try:
+                found_idx = None
+                clean_name = dev_name
+                if "]" in dev_name: clean_name = dev_name.split("]")[1].strip()
+
+                for i, d in enumerate(self.sd.query_devices()):
+                    if clean_name in d['name'] and d['max_input_channels'] > 0:
+                        found_idx = i
+                        break
+
+                self.device_index = found_idx
+                if found_idx is not None:
+                     logger.info(f"Found device '{clean_name}' at index {found_idx}")
+                else:
+                     logger.warning(f"Device '{clean_name}' not found. Using default.")
+                     self.device_index = None
+            except:
+                self.device_index = None
 
     def run(self) -> None:
         if not self.running:

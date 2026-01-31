@@ -17,6 +17,12 @@ class TestAudioEngine(unittest.TestCase):
 
     def test_device_setting(self):
         pump = AudioPump()
+
+        # Mock query_devices to return a matching device
+        pump.sd = MagicMock()
+        pump.sd.query_devices.return_value = {'name': 'Test Device', 'max_input_channels': 2}
+
+        # This will now pass verification
         pump.set_device("[1] Test Device")
         self.assertEqual(pump.device_index, 1)
 

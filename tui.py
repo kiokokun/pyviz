@@ -119,6 +119,12 @@ class PyVizController(App):
                             yield Input(value="0.15", id="smooth_input", classes="adjust-input")
                             yield Button("+", id="smooth_up", classes="adjust-btn")
 
+                        yield Label("Noise Floor (dB)")
+                        yield Input(value="-60.0", id="noise_input", classes="adjust-input")
+
+                        yield Label("Auto Gain")
+                        yield Switch(value=True, id="gain_switch")
+
             with TabPane("Text & AFK", id="tab_text"):
                 with ScrollableContainer():
                     with Vertical(classes="box"):
@@ -183,6 +189,8 @@ class PyVizController(App):
 
         self.query_one("#grav_input", Input).value = str(self.state.get('gravity', 0.25))
         self.query_one("#smooth_input", Input).value = str(self.state.get('smoothing', 0.15))
+        self.query_one("#noise_input", Input).value = str(self.state.get('noise_floor', -60.0))
+        self.query_one("#gain_switch", Switch).value = self.state.get('auto_gain', True)
 
         # Text
         self.query_one("#text_input", Input).value = self.state.get('text_str', '')
@@ -197,8 +205,11 @@ class PyVizController(App):
 
     def save_state(self):
         try:
-            with open(CONFIG_FILE, 'w') as f:
+            # Atomic write
+            tmp_file = CONFIG_FILE + ".tmp"
+            with open(tmp_file, 'w') as f:
                 json.dump(self.state, f)
+            os.replace(tmp_file, CONFIG_FILE)
         except: pass
 
     # --- Event Handlers ---
@@ -273,6 +284,9 @@ class PyVizController(App):
         elif iid == "smooth_input":
             try: self.state['smoothing'] = float(val)
             except: pass
+        elif iid == "noise_input":
+            try: self.state['noise_floor'] = float(val)
+            except: pass
 
         self.save_state()
 
@@ -286,6 +300,7 @@ class PyVizController(App):
         elif sid == "text_switch": self.state['text_on'] = val
         elif sid == "text_glitch_switch": self.state['text_glitch'] = val
         elif sid == "afk_switch": self.state['afk_enabled'] = val
+        elif sid == "gain_switch": self.state['auto_gain'] = val
 
         self.save_state()
 

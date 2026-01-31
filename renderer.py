@@ -28,7 +28,11 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
 # Helpers
+_IMG_CACHE = {}
 def process_image(path: str, w: int, h: int) -> List[List[Tuple[str, Tuple[int, int, int]]]]:
+    key = (path, w, h)
+    if key in _IMG_CACHE: return _IMG_CACHE[key]
+
     if not path or not os.path.exists(path): return []
     if Image is None: return []
     try:
@@ -39,6 +43,10 @@ def process_image(path: str, w: int, h: int) -> List[List[Tuple[str, Tuple[int, 
                 r,g,b = px[x,y]
                 row.append((".", (r,g,b)))
             new_buf.append(row)
+
+        # Simple cache eviction
+        if len(_IMG_CACHE) > 10: _IMG_CACHE.clear()
+        _IMG_CACHE[key] = new_buf
         return new_buf
     except: return []
 
@@ -149,7 +157,10 @@ class Renderer:
         else:
             raw_db = np.zeros(w) - 100
 
-        norm = (raw_db - state['noise_floor']) / (0 - state['noise_floor'])
+        floor = state.get('noise_floor', -60.0)
+        if floor == 0: floor = -0.001 # Prevent DivZero
+
+        norm = (raw_db - floor) / (0 - floor)
         norm = np.clip(norm, 0, 1.0)
 
         s = state.get('smoothing', 0.15)
