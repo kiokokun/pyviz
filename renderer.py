@@ -24,6 +24,7 @@ except ImportError:
     HAS_FIGLET = False
 
 # Helpers
+# Helpers (moved/adapted from original renderer)
 def process_image(path: str, w: int, h: int) -> List[List[Tuple[str, Tuple[int, int, int]]]]:
     if not path or not os.path.exists(path): return []
     if Image is None: return []
@@ -33,6 +34,7 @@ def process_image(path: str, w: int, h: int) -> List[List[Tuple[str, Tuple[int, 
             row = []
             for x in range(w):
                 r,g,b = px[x,y]
+                # Simple char mapping
                 row.append((".", (r,g,b)))
             new_buf.append(row)
         return new_buf
@@ -48,6 +50,7 @@ def get_gradient_color(y: int, h: int, start_rgb: Union[List[int], Tuple[int, in
 
     if key in _GRADIENT_CACHE: return _GRADIENT_CACHE[key]
 
+def get_gradient_color(y: int, h: int, start_rgb: Tuple[int, int, int], end_rgb: Tuple[int, int, int]) -> Tuple[int, int, int]:
     ratio = y / max(h, 1)
     r = int(start_rgb[0] + (end_rgb[0] - start_rgb[0]) * ratio)
     g = int(start_rgb[1] + (end_rgb[1] - start_rgb[1]) * ratio)
@@ -57,6 +60,7 @@ def get_gradient_color(y: int, h: int, start_rgb: Union[List[int], Tuple[int, in
     if len(_GRADIENT_CACHE) > 2000: _GRADIENT_CACHE.clear()
     _GRADIENT_CACHE[key] = res
     return res
+    return (r, g, b)
 
 class Star:
     def __init__(self) -> None: self.reset(True)
@@ -64,6 +68,7 @@ class Star:
     def move(self, spd: float) -> None:
         self.z -= spd
         if self.z <= 0.05: self.reset()
+    # Updated draw signature to match Rich Renderer needs (modifying buffers directly)
     def draw(self, buf: List[List[str]], cbf: List[List[Tuple[Tuple[int,int,int], Tuple[int,int,int]]]], w: int, h: int, col_style: Callable) -> None:
         if self.z <= 0: return
         fx = int((self.x/self.z)*w*0.5+w/2); fy = int((self.y/self.z)*h*0.5+h/2)
@@ -81,6 +86,7 @@ class Renderer:
         self.stars_list: List[Star] = [Star() for _ in range(100)]
 
         self.effects: List[Any] = [GlitchEffect()]
+        self.effects: List[Any] = [GlitchEffect()] # Initialize effects
 
         self.buf_bg: List[List[Tuple[str, Tuple[int, int, int]]]] = []
         self.buf_fg: List[List[Tuple[str, Tuple[int, int, int]]]] = []
@@ -111,11 +117,17 @@ class Renderer:
             w = console_w // 2
 
         # D. Resize Buffers (Logical Width)
+    def generate_frame(self, state: dict, audio: Any, w: int, h: int) -> Text:
+        if not np:
+            return Text("Numpy missing - Cannot render", style="bold red")
+
+        # D. Resize Buffers
         if len(self.bands) != w:
             self.bands = np.zeros(w)
             self.peak_heights = np.zeros(w)
 
         # E. Reload Images (Logical Width)
+        # E. Reload Images if size changed
         if w != self.last_w or h != self.last_h:
             if state['img_bg_path']: self.buf_bg = process_image(state['img_bg_path'], w, h)
             if state['img_fg_path']: self.buf_fg = process_image(state['img_fg_path'], w, h)
@@ -135,12 +147,34 @@ class Renderer:
         s = state.get('smoothing', 0.15)
         self.bands = self.bands * s + norm * (1 - s)
 
+        # Resample 1024 bins -> W columns
+        indices = np.linspace(0, 1023, w).astype(int)
+
+        # Retrieve raw dB from thread
+        # Handle empty/missing audio data
+        if len(audio.raw_fft) == 1024:
+            raw_db = audio.raw_fft[indices]
+        else:
+            raw_db = np.zeros(w) - 100 # Silence
+
+        # Normalize (-60dB floor)
+        norm = (raw_db - state['noise_floor']) / (0 - state['noise_floor'])
+        norm = np.clip(norm, 0, 1.0) # Clip 0-1
+
+        # Smooth
+        s = state.get('smoothing', 0.15)
+        self.bands = self.bands * s + norm * (1 - s)
+
+        # Auto Gain
         agc = 1.0
         if state['auto_gain']:
             peak = np.max(self.bands)
             if peak > 0: agc = 1.0 / peak
             agc = min(agc, 5.0)
 
+            agc = min(agc, 5.0) # Cap gain
+
+        # Final Height
         target_h = self.bands * h * agc * state['sens']
 
         # Physics
@@ -163,6 +197,12 @@ class Renderer:
         WHITE = (255,255,255)
 
         def col_style(fg: Tuple[int,int,int], bg: Tuple[int,int,int]=BLACK) -> Tuple[Tuple[int,int,int], Tuple[int,int,int]]:
+        # Type: List[List[str]]
+        buf = [[" " for _ in range(w)] for _ in range(h)]
+        # Type: List[List[Tuple[FG_RGB, BG_RGB]]]
+        cbf = [[((255,255,255), (0,0,0)) for _ in range(w)] for _ in range(h)] # Default
+
+        def col_style(fg: Tuple[int,int,int], bg: Tuple[int,int,int]=(0,0,0)) -> Tuple[Tuple[int,int,int], Tuple[int,int,int]]:
             return (fg, bg)
 
         # BG Layer
@@ -171,11 +211,16 @@ class Renderer:
                 for x in range(w):
                     if y < len(self.buf_bg) and x < len(self.buf_bg[0]):
                         res = self.buf_bg[y][x]
+                    # Tiling check
+                    if y < len(self.buf_bg) and x < len(self.buf_bg[0]):
+                        res = self.buf_bg[y][x]
+                        # res is (char, rgb)
                         if state['style'] != 0:
                             cbf[y][x] = col_style(res[1])
                             buf[y][x] = res[0]
                         else:
                             cbf[y][x] = col_style(WHITE, res[1])
+                            cbf[y][x] = col_style((255,255,255), res[1])
                             buf[y][x] = " "
 
         # Stars
@@ -252,6 +297,36 @@ class Renderer:
                  left_c = cbf[y][:mid]
                  cbf[y] = left_c + left_c[::-1]
 
+        for y in range(h):
+            inv_y = h - 1 - y
+            # Gradient
+            row_rgb = get_gradient_color(inv_y, h, theme_t[0], theme_t[1])
+
+            for x in range(w):
+                # Height check
+                bar_val = target_h[x]
+
+                if inv_y < bar_val:
+                    final_rgb = row_rgb
+                    # FG Texture
+                    if state['img_fg_on'] and self.buf_fg:
+                            if y < len(self.buf_fg) and x < len(self.buf_fg[0]):
+                                final_rgb = self.buf_fg[y][x][1]
+
+                    # Style
+                    if state['style'] == 1: # Block
+                        cbf[y][x] = col_style((255,255,255), final_rgb) # BG color
+                        buf[y][x] = " "
+                    else: # Char
+                        char_idx = int((inv_y/max(bar_val,1)) * (len(chars)-1))
+                        cbf[y][x] = col_style(final_rgb)
+                        buf[y][x] = chars[char_idx]
+
+                # Peak
+                if state['peaks_on'] and inv_y == int(self.peak_heights[x]):
+                    cbf[y][x] = col_style((255,255,255), (200,200,200)) # White FG, Light Gray BG
+                    buf[y][x] = " "
+
         # Text Overlay
         if state['text_on']:
             txt = state['text_str']
@@ -273,6 +348,12 @@ class Renderer:
                         if c != " ":
                             cbf[line_y][dx] = (WHITE, BLACK)
                             buf[line_y][dx] = c
+                for j, c in enumerate(l):
+                    dx = int((w - len(l))/2) + j # Center
+                    if 0 <= sy+i < h and 0 <= dx < w:
+                        if c != " ":
+                            cbf[sy+i][dx] = col_style((255,255,255), (0,0,0))
+                            buf[sy+i][dx] = c
 
         # Effects
         for effect in self.effects:
@@ -333,6 +414,25 @@ class Renderer:
                     chunk = "".join([c * scale_x for c in chunk])
                 line.append(chunk, style=style_str)
 
+
+            def dummy_col(rgb: Tuple[int,int,int]) -> Tuple[Tuple[int,int,int], Tuple[int,int,int]]:
+                return (rgb, (0,0,0))
+
+            try:
+                effect.draw(buf, cbf, w, h, dummy_col)
+            except: pass
+
+        # Build Rich Text
+        screen_text = Text()
+        for y in range(h):
+            line = Text()
+            for x in range(w):
+                char = buf[y][x]
+                fg, bg = cbf[y][x]
+                style = f"rgb({fg[0]},{fg[1]},{fg[2]})"
+                if bg != (0,0,0):
+                    style += f" on rgb({bg[0]},{bg[1]},{bg[2]})"
+                line.append(char, style=style)
             screen_text.append(line)
             screen_text.append("\n")
 
@@ -350,6 +450,12 @@ class Renderer:
                 # Dimensions
                 w = self.console.width
                 h = self.console.height - 2
+                # Update Audio
+                # (Done in thread)
+
+                # Dimensions
+                w = self.console.width
+                h = self.console.height - 2 # Reserve space for HUD?
 
                 # Generate Frame
                 frame_text = self.generate_frame(state, audio_provider, w, h)
@@ -357,6 +463,7 @@ class Renderer:
                 # HUD
                 vol_bar = "#" * int(min(20, audio_provider.volume))
                 hud_text = Text(f"DEVICE: {audio_provider.connected_device:<30} | VOL: {vol_bar:<20} | STATE: {audio_provider.status} | FPS: 30", style="bold white on black")
+                hud_text = Text(f"DEVICE: {audio_provider.connected_device:<30} | VOL: {vol_bar:<20} | STATE: {audio_provider.status}", style="bold white on black")
 
                 # Layout
                 layout = Layout()
@@ -367,4 +474,5 @@ class Renderer:
 
                 live.update(layout)
 
+                # FPS limiter
                 time.sleep(0.001)
