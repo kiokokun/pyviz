@@ -254,18 +254,31 @@ class Renderer:
 
         # Mirror (Post-Process)
         if mirror:
-             # Split rendering? Or just copy left to right buffer?
-             # Simple approach: render full, but force symmetry?
-             # No, mirror usually means center outward.
-             # Doing this in drawing loop is complex.
-             # Post-process buffer:
+             # Simple approach: Mirror left half to right half
              mid = w // 2
+             is_odd = (w % 2 != 0)
+
              for y in range(h):
-                 # Copy 0..mid to mid..w (reversed)
+                 # Copy 0..mid to right side
                  left_part = buf[y][:mid]
-                 buf[y] = left_part + left_part[::-1]
+                 right_part = left_part[::-1]
+
+                 if is_odd:
+                     # Preserve center column
+                     center_col = [buf[y][mid]]
+                     buf[y] = left_part + center_col + right_part
+                 else:
+                     buf[y] = left_part + right_part
+
+                 # Same for colors
                  left_c = cbf[y][:mid]
-                 cbf[y] = left_c + left_c[::-1]
+                 right_c = left_c[::-1]
+
+                 if is_odd:
+                     center_c = [cbf[y][mid]]
+                     cbf[y] = left_c + center_c + right_c
+                 else:
+                     cbf[y] = left_c + right_c
 
         # Text Overlay
         if state['text_on']:
