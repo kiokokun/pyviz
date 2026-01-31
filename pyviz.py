@@ -92,7 +92,8 @@ def run_controller():
         py_exe = sys.executable
 
         if os.name == 'nt':
-             subprocess.Popen(f'start cmd /k "{py_exe}" "{cmd_path}" --engine', shell=True)
+             # "start" on Windows takes the first quoted argument as the window title
+             subprocess.Popen(f'start "ULTRA_DECK REBORN" cmd /k "{py_exe}" "{cmd_path}" --engine', shell=True)
         else:
              # Try to find a terminal emulator
              terminals = ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm']
