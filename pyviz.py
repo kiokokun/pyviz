@@ -1,12 +1,11 @@
 import sys
 import time
-import random
 import threading
-import math
 import traceback
 import shutil
 import os
 import json
+import argparse
 from logger import setup_logger
 
 logger = setup_logger("PyViz")
@@ -23,8 +22,18 @@ from renderer import Renderer
 # ==========================================
 def run_engine():
     logger.info("Starting Visualizer Engine")
+
     # 1. Start Audio Thread
     audio = AudioPump()
+
+    # Ensure audio stops on exit
+    import atexit
+    def cleanup():
+        logger.info("Stopping audio thread...")
+        audio.running = False
+        audio.join(timeout=1.0)
+    atexit.register(cleanup)
+
     audio.start()
 
     # 2. Setup Renderer
@@ -67,18 +76,42 @@ def run_engine():
         # Fallback to simple file for catastrophic failure
         with open("error.log", "w") as f:
             f.write(traceback.format_exc())
+    finally:
+        cleanup()
 
 # ==========================================
 # /// CONTROLLER ///
 # ==========================================
 def run_controller():
-    # Deprecated Tkinter controller replaced by TUI
+    # Check dependencies before importing TUI
+    missing = []
+    try: import textual
+    except ImportError: missing.append("textual")
+
+    try: import sounddevice
+    except ImportError: missing.append("sounddevice")
+
+    try: import numpy
+    except ImportError: missing.append("numpy")
+
+    try: import PIL
+    except ImportError: missing.append("Pillow")
+
+    if missing:
+        print(f"ERROR: Missing libraries: {', '.join(missing)}")
+        print("Please run 'pip install -r requirements.txt'")
+        sys.exit(1)
+
     from tui import PyVizController
     app = PyVizController()
     app.run()
 
 if __name__ == "__main__":
-    if "--engine" in sys.argv:
+    parser = argparse.ArgumentParser(description="PyViz Audio Visualizer")
+    parser.add_argument("--engine", action="store_true", help="Run the rendering engine directly")
+    args = parser.parse_args()
+
+    if args.engine:
         run_engine()
     else:
         run_controller()

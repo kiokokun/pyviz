@@ -28,7 +28,11 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
 # Helpers
+_IMG_CACHE = {}
 def process_image(path: str, w: int, h: int) -> List[List[Tuple[str, Tuple[int, int, int]]]]:
+    key = (path, w, h)
+    if key in _IMG_CACHE: return _IMG_CACHE[key]
+
     if not path or not os.path.exists(path): return []
     if Image is None: return []
     try:
@@ -39,8 +43,12 @@ def process_image(path: str, w: int, h: int) -> List[List[Tuple[str, Tuple[int, 
                 r,g,b = px[x,y]
                 row.append((".", (r,g,b)))
             new_buf.append(row)
+
+        # Simple cache eviction
+        if len(_IMG_CACHE) > 10: _IMG_CACHE.clear()
+        _IMG_CACHE[key] = new_buf
         return new_buf
-    except: return []
+    except Exception: return []
 
 # Cached gradient calculation
 _GRADIENT_CACHE = {}
@@ -66,6 +74,9 @@ def col_style(fg: Tuple[int,int,int], bg: Tuple[int,int,int]=BLACK) -> Tuple[Tup
     return (fg, bg)
 
 class Star:
+    """
+    Represents a single star in the background starfield effect.
+    """
     def __init__(self) -> None:
         self.reset(True)
 
@@ -91,10 +102,14 @@ class Star:
                 if buf[fy][fx] == " ":
                     buf[fy][fx] = '.'
                     cbf[fy][fx] = col_style_fn((255, 255, 255))
-            except:
+            except Exception:
                 pass
 
 class Renderer:
+    """
+    Main visualization renderer using Rich.
+    Handles audio data processing, buffer generation, and drawing.
+    """
     def __init__(self) -> None:
         self.bands: Any = np.zeros(100) if np else []
         self.peak_heights: Any = np.zeros(100) if np else []
@@ -114,6 +129,9 @@ class Renderer:
     def generate_frame(self, state: dict, audio: Any, console_w: int, h: int) -> Text:
         if not np:
             return Text("Numpy missing - Cannot render", style="bold red")
+
+        if h <= 0 or console_w <= 0:
+            return Text("")
 
         # Logic for downsampling / limiting bars
         # If console width is huge, we calculate fewer bars and stretch them.
@@ -149,7 +167,10 @@ class Renderer:
         else:
             raw_db = np.zeros(w) - 100
 
-        norm = (raw_db - state['noise_floor']) / (0 - state['noise_floor'])
+        floor = state.get('noise_floor', -60.0)
+        if floor == 0: floor = -0.001 # Prevent DivZero
+
+        norm = (raw_db - floor) / (0 - floor)
         norm = np.clip(norm, 0, 1.0)
 
         s = state.get('smoothing', 0.15)
@@ -161,14 +182,18 @@ class Renderer:
             if peak > 0: agc = 1.0 / peak
             agc = min(agc, 5.0)
 
-        target_h = self.bands * h * agc * state['sens']
+        try:
+            target_h = self.bands * h * agc * float(state.get('sens', 1.0))
+        except (ValueError, TypeError):
+            target_h = self.bands * h * agc # Fallback
 
         # Physics
+        peak_g = float(state.get('peak_gravity', 0.15))
         for i in range(w):
             bh = target_h[i]
             if bh > h: bh = h
             if bh >= self.peak_heights[i]: self.peak_heights[i] = bh
-            else: self.peak_heights[i] = max(0, self.peak_heights[i] - state['peak_gravity'])
+            else: self.peak_heights[i] = max(0, self.peak_heights[i] - peak_g)
 
         # G. Drawing
         # Init buffers
@@ -254,26 +279,44 @@ class Renderer:
 
         # Mirror (Post-Process)
         if mirror:
-             # Split rendering? Or just copy left to right buffer?
-             # Simple approach: render full, but force symmetry?
-             # No, mirror usually means center outward.
-             # Doing this in drawing loop is complex.
-             # Post-process buffer:
+             # Simple approach: Mirror left half to right half
              mid = w // 2
+             is_odd = (w % 2 != 0)
+
              for y in range(h):
-                 # Copy 0..mid to mid..w (reversed)
+                 # Copy 0..mid to right side
                  left_part = buf[y][:mid]
-                 buf[y] = left_part + left_part[::-1]
+                 right_part = left_part[::-1]
+
+                 if is_odd:
+                     # Preserve center column
+                     center_col = [buf[y][mid]]
+                     buf[y] = left_part + center_col + right_part
+                 else:
+                     buf[y] = left_part + right_part
+
+                 # Same for colors
                  left_c = cbf[y][:mid]
-                 cbf[y] = left_c + left_c[::-1]
+                 right_c = left_c[::-1]
+
+                 if is_odd:
+                     center_c = [cbf[y][mid]]
+                     cbf[y] = left_c + center_c + right_c
+                 else:
+                     cbf[y] = left_c + right_c
 
         # Text Overlay
         if state['text_on']:
             txt = state['text_str']
             banner = [txt]
             if HAS_FIGLET:
-                try: banner = pyfiglet.figlet_format(txt, font=FONT_MAP.get(state['text_font'], 'standard')).split('\n')
-                except: pass
+                try:
+                    font = FONT_MAP.get(state['text_font'], 'standard')
+                    banner = pyfiglet.figlet_format(txt, font=font).split('\n')
+                except Exception as e:
+                    # Font not found fallback
+                    try: banner = pyfiglet.figlet_format(txt, font='standard').split('\n')
+                    except: pass
 
             sy = int(state['text_pos_y'] * (h - len(banner)))
             for i, l in enumerate(banner):

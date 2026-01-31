@@ -16,6 +16,9 @@ except (ImportError, OSError) as e:
     logger.critical(f"Audio libraries missing: {e}")
 
 class AudioPump(threading.Thread):
+    """
+    Handles audio input, FFT processing, and beat detection in a separate thread.
+    """
     def __init__(self) -> None:
         super().__init__()
         self.daemon = True
@@ -47,13 +50,44 @@ class AudioPump(threading.Thread):
             # Parse ID if present "[81] Name"
             if dev_name.startswith("["):
                 try:
-                    self.device_index = int(dev_name.split("]")[0].replace("[", ""))
-                    logger.info(f"Selected device index: {self.device_index}")
-                except:
-                    self.device_index = None
-            else:
-                logger.info(f"Auto-selecting device (name: {dev_name})")
-                self.device_index = None # Auto-find later
+                    idx_str = dev_name.split("]")[0].replace("[", "")
+                    target_idx = int(idx_str)
+
+                    # Verify if device at this index matches the name (roughly)
+                    # This prevents index shifting issues
+                    try:
+                        info = self.sd.query_devices(target_idx)
+                        if info['name'] in dev_name:
+                            self.device_index = target_idx
+                            logger.info(f"Selected device index: {self.device_index}")
+                            return
+                        else:
+                            logger.warning(f"Device index {target_idx} mismatch. Expected {dev_name}, got {info['name']}. Fallback to search.")
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+
+            # Fallback: Search by name
+            logger.info(f"Searching for device: {dev_name}")
+            try:
+                found_idx = None
+                clean_name = dev_name
+                if "]" in dev_name: clean_name = dev_name.split("]")[1].strip()
+
+                for i, d in enumerate(self.sd.query_devices()):
+                    if clean_name in d['name'] and d['max_input_channels'] > 0:
+                        found_idx = i
+                        break
+
+                self.device_index = found_idx
+                if found_idx is not None:
+                     logger.info(f"Found device '{clean_name}' at index {found_idx}")
+                else:
+                     logger.warning(f"Device '{clean_name}' not found. Using default.")
+                     self.device_index = None
+            except:
+                self.device_index = None
 
     def run(self) -> None:
         if not self.running:
@@ -62,7 +96,15 @@ class AudioPump(threading.Thread):
         while self.running:
             try:
                 if self.device_index is None:
-                    time.sleep(1)
+                    # Wait for device selection
+                    time.sleep(0.5)
+                    # Check again if devices appeared (in case of empty list earlier)
+                    if self.sd:
+                        try:
+                            if len(self.sd.query_devices()) > 0:
+                                # Trigger auto-search again? For now just wait.
+                                pass
+                        except: pass
                     continue
 
                 if self.sd is None or self.np is None:
@@ -77,14 +119,22 @@ class AudioPump(threading.Thread):
                     self.status = "CONNECTED"
                     logger.info(f"Connected to {self.connected_device}")
 
-                    with self.sd.InputStream(device=self.device_index, channels=1, samplerate=rate, blocksize=2048) as stream:
+                    # Safe blocksize logic
+                    blocksize = 2048
+                    try:
+                        # Try to query device preferences?
+                        # For now, keep 2048 but allow failure to catch it.
+                        pass
+                    except: pass
+
+                    with self.sd.InputStream(device=self.device_index, channels=1, samplerate=rate, blocksize=blocksize) as stream:
                         while self.running and self.device_index is not None:
                             # Check stream status
                             if not stream.active:
                                 raise OSError("Stream inactive")
 
                             # READ RAW DATA
-                            data, overflow = stream.read(2048)
+                            data, overflow = stream.read(blocksize)
                             if overflow:
                                 logger.warning("Audio buffer overflow")
 
