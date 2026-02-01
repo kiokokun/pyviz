@@ -159,6 +159,70 @@ class FileOpenScreen(ModalScreen[str]):
         if event.button.id == "cancel_btn":
             self.dismiss(None)
 
+class SavePresetScreen(ModalScreen[str]):
+    """Modal to enter preset name."""
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="box"):
+            yield Label("Save Preset As:")
+            yield Input(placeholder="my_preset", id="preset_name")
+            with Horizontal():
+                yield Button("Save", id="save_btn", variant="success")
+                yield Button("Cancel", id="cancel_btn", variant="error")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel_btn":
+            self.dismiss(None)
+        elif event.button.id == "save_btn":
+            val = self.query_one("#preset_name", Input).value
+            if val: self.dismiss(val)
+
+class HelpScreen(ModalScreen):
+    """Help Modal."""
+    def compose(self) -> ComposeResult:
+        help_text = """
+        [bold underline]PyViz Help[/]
+
+        [bold]Controls:[/bold]
+        - [green]Sensitivity[/]: Multiplier for microphone volume. Increase if bars are too small.
+        - [green]Gravity[/]: How fast bars fall down.
+        - [green]Smoothing[/]: Blends frames for smoother motion. High = slow/smooth.
+        - [green]Bass Threshold[/]: Audio level required to trigger beat effects (glitch/pulse).
+        - [green]Noise Floor[/]: Minimum volume (dB) to register as sound. Decrease if quiet sounds are ignored.
+
+        [bold]Modes:[/bold]
+        - [yellow]Mirror[/]: Duplicates the left half of the screen to the right.
+        - [yellow]Glitch[/]: Random visual artifacts triggered by bass beats.
+
+        [bold]Presets:[/bold]
+        - Save your current setup to the 'presets/' folder to load later.
+        """
+        with Vertical(classes="box"):
+            yield Static(help_text)
+            yield Button("Close", id="close_help", variant="primary")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss()
+
+class LoadPresetScreen(ModalScreen[str]):
+    """Modal to select a preset."""
+    def compose(self) -> ComposeResult:
+        presets_dir = os.path.join(os.getcwd(), "presets")
+        if not os.path.exists(presets_dir):
+            os.makedirs(presets_dir)
+
+        with Vertical(classes="box"):
+            yield Label("Select Preset")
+            yield DirectoryTree(presets_dir, id="preset_tree")
+            with Horizontal():
+                yield Button("Cancel", id="cancel_btn", variant="error")
+
+    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+        self.dismiss(str(event.path))
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel_btn":
+            self.dismiss(None)
+
 class PyVizController(App):
     """
     Main TUI Controller for PyViz.
@@ -180,6 +244,12 @@ class PyVizController(App):
                     yield Label("Audio Source")
                     yield Select([], id="dev_select", prompt="Select Input Device", tooltip="Select the audio input device (requires restart if engine running)")
                     yield Button("Refresh Devices", id="refresh_dev", variant="primary", tooltip="Reload list of audio devices")
+
+                with Vertical(classes="box"):
+                    yield Label("Preset Manager")
+                    with Horizontal():
+                        yield Button("Load Preset", id="load_preset_btn", variant="primary")
+                        yield Button("Save Preset", id="save_preset_btn", variant="success")
 
                 with Vertical(classes="box"):
                     yield Label("Sensitivity")
@@ -351,7 +421,9 @@ class PyVizController(App):
         # Bottom Panel (Always Visible)
         with Vertical(classes="bottom-panel"):
             yield Static("Ready.", id="debug_log", classes="debug-panel")
-            yield Button(">>> LAUNCH ENGINE <<<", id="launch_btn", variant="success")
+            with Horizontal():
+                yield Button("Help", id="help_btn", variant="primary", classes="adjust-btn")
+                yield Button(">>> LAUNCH ENGINE <<<", id="launch_btn", variant="success")
 
         yield Footer()
 
@@ -518,6 +590,12 @@ class PyVizController(App):
             self.save_state()
             self.notify("Reset to defaults!", severity="information")
             self.debug("Reset to defaults.")
+        elif bid == "save_preset_btn":
+            self.push_screen(SavePresetScreen(), self.save_preset)
+        elif bid == "load_preset_btn":
+            self.push_screen(LoadPresetScreen(), self.load_preset)
+        elif bid == "help_btn":
+            self.push_screen(HelpScreen())
         elif bid == "img_thresh_up":
             self.state['img_thresh'] = round(min(0.95, self.state.get('img_thresh', 0.05) + 0.05), 2)
             self.query_one("#img_thresh_input", Input).value = str(self.state['img_thresh'])
@@ -526,6 +604,34 @@ class PyVizController(App):
             self.state['img_thresh'] = round(max(0.0, self.state.get('img_thresh', 0.05) - 0.05), 2)
             self.query_one("#img_thresh_input", Input).value = str(self.state['img_thresh'])
             self.save_state()
+
+    def save_preset(self, name: str | None):
+        if not name: return
+        try:
+            if not name.endswith(".json"): name += ".json"
+            path = os.path.join("presets", name)
+            with open(path, 'w') as f:
+                json.dump(self.state, f)
+            self.debug(f"Saved preset: {name}")
+            self.notify(f"Saved {name}")
+        except Exception as e:
+            self.debug(f"Preset Save Error: {e}")
+
+    def load_preset(self, path: str | None):
+        if not path: return
+        try:
+            with open(path, 'r') as f:
+                new_state = json.load(f)
+            # Merge logic? Or replace? Replace is safer.
+            # But we want to preserve device? Maybe.
+            # For now, full replace except maybe dev_name if missing
+            self.state.update(new_state)
+            self.sync_ui_to_state()
+            self.save_state() # Persist as current config
+            self.debug(f"Loaded preset: {os.path.basename(path)}")
+            self.notify("Preset Loaded!")
+        except Exception as e:
+            self.debug(f"Preset Load Error: {e}")
 
     def open_file_picker(self, target: str):
         def set_file(path: str | None):
