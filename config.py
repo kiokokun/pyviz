@@ -18,6 +18,21 @@ DEFAULT_STATE = {
     "img_fg_path": "", "img_fg_on": False, "img_fg_flip": False
 }
 
+CHAR_SETS = {
+    "Blocks": "  ▂▃▄▅▆▇█",
+    "Lines": "  --==##",
+    "Dots": "  ....::::",
+    "Digital": "  01",
+    "ASCII": "  .,:;!|",
+    "Shade": " ░▒▓█",
+    "Thin": "  │┃",
+    "Circles": "  ○●",
+    "Math": "  +-x=",
+    "Braille": " ⠀⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏",
+    "Retro": "  _.-=*",
+    "Sparkle": "  .*+@"
+}
+
 THEMES = {
     "Eevee": ([160, 110, 60], [230, 220, 180]),
     "Vaporeon": ([20, 50, 180], [100, 220, 255]),
