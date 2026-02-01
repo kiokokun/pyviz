@@ -29,8 +29,18 @@ class AudioPump(threading.Thread):
         # Shared Data
         if AUDIO_AVAILABLE:
             self.raw_fft: Any = np.zeros(1024)
+            self.raw_fft_left: Any = np.zeros(1024)
+            self.raw_fft_right: Any = np.zeros(1024)
+            self.raw_pcm: Any = np.zeros(2048) # Mono
+            self.raw_pcm_left: Any = np.zeros(2048)
+            self.raw_pcm_right: Any = np.zeros(2048)
         else:
             self.raw_fft = []
+            self.raw_fft_left = []
+            self.raw_fft_right = []
+            self.raw_pcm = []
+            self.raw_pcm_left = []
+            self.raw_pcm_right = []
 
         self.volume: float = 0.0
         self.status: str = "IDLE"
@@ -127,6 +137,15 @@ class AudioPump(threading.Thread):
         except:
             self.device_index = None
 
+    def _process_fft(self, signal):
+        """Helper to compute FFT log magnitude"""
+        if len(signal) == 0: return np.zeros(1024)
+        win = signal * self.np.hanning(len(signal))
+        fft = self.np.abs(self.np.fft.rfft(win))[:1024]
+        # Log scaling
+        db = 20 * self.np.log10(fft + 1e-9)
+        return db
+
     def run(self) -> None:
         if not self.running:
             return
@@ -163,13 +182,14 @@ class AudioPump(threading.Thread):
 
                     # Safe blocksize logic
                     blocksize = 2048
-                    try:
-                        # Try to query device preferences?
-                        # For now, keep 2048 but allow failure to catch it.
-                        pass
-                    except: pass
 
-                    with self.sd.InputStream(device=self.device_index, channels=1, samplerate=rate, blocksize=blocksize) as stream:
+                    # Try to open with 2 channels, but fallback if device only supports 1
+                    channels = 2
+                    if dev_info['max_input_channels'] < 2:
+                        channels = 1
+                        logger.info("Device only supports 1 channel. Forcing mono.")
+
+                    with self.sd.InputStream(device=self.device_index, channels=channels, samplerate=rate, blocksize=blocksize) as stream:
                         while self.running and self.device_index is not None:
                             # Check stream status
                             if not stream.active:
@@ -181,8 +201,26 @@ class AudioPump(threading.Thread):
                                 logger.warning("Audio buffer overflow")
 
                             if self.np.any(data):
-                                # Process FFT
-                                mono = data[:, 0]
+                                # Extract Channels
+                                if channels == 2:
+                                    left = data[:, 0]
+                                    right = data[:, 1]
+                                    # Mono mix for beat detection
+                                    mono = (left + right) / 2
+                                else:
+                                    # Mono Device
+                                    if len(data.shape) > 1:
+                                        mono = data[:, 0]
+                                    else:
+                                        mono = data
+                                    left = mono
+                                    right = mono
+
+                                # Store Raw PCM
+                                self.raw_pcm = mono
+                                self.raw_pcm_left = left
+                                self.raw_pcm_right = right
+
                                 self.volume = float(self.np.linalg.norm(mono) * 10) # Rough volume
 
                                 # Beat Detection (Simple Energy Based)
@@ -210,14 +248,10 @@ class AudioPump(threading.Thread):
                                 else:
                                     self.is_beat = False
 
-                                win = mono * self.np.hanning(len(mono))
-                                fft = self.np.abs(self.np.fft.rfft(win))[:1024]
-
-                                # Log scaling
-                                db = 20 * self.np.log10(fft + 1e-9)
-
-                                # Thread-safe update
-                                self.raw_fft = db
+                                # Compute FFTs
+                                self.raw_fft = self._process_fft(mono)
+                                self.raw_fft_left = self._process_fft(left)
+                                self.raw_fft_right = self._process_fft(right)
                             else:
                                 self.volume = 0.0
                                 self.is_beat = False

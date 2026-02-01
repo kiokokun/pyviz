@@ -6,6 +6,8 @@ DEFAULT_STATE = {
     "sens": 1.0, "auto_gain": True, "noise_floor": -60.0,
     "rise_speed": 0.6, "gravity": 0.25, "smoothing": 0.15,
     "style": 2, "mirror": False, "glitch": 0.0, "bass_thresh": 0.7,
+    "matrix_rain": False, "pong_mode": False, "waterfall_mode": False,
+    "scope_mode": False, "lissajous_mode": False, "life_mode": False,
     "fps": 30,
     "color_mode": "Theme", "solid_color": [0, 255, 128],
     "grad_start": [0, 0, 255], "grad_end": [0, 255, 255], "theme_name": "Vaporeon",
