@@ -45,21 +45,6 @@ def process_image(path: str, w: int, h: int) -> Union[List[List[Tuple[int, int, 
 
         frames = []
         is_animated = getattr(im, "is_animated", False)
-
-        frame_iter = ImageSequence.Iterator(im) if is_animated else [im]
-
-        for frame in frame_iter:
-            f_img = frame.copy().resize((w, h)).convert("RGB")
-            px = f_img.load()
-            new_buf = []
-            for y in range(h):
-                row = []
-                for x in range(w):
-                    r,g,b = px[x,y]
-                    new_buf.append((r,g,b))
-                frames.append([new_buf[i:i+w] for i in range(0, len(new_buf), w)])
-            # Wait, logic above is convoluted. Simplify.
-
         # Proper Loop
         frames = []
         frame_iter = ImageSequence.Iterator(im) if is_animated else [im]
@@ -79,6 +64,11 @@ def process_image(path: str, w: int, h: int) -> Union[List[List[Tuple[int, int, 
 
         # Simple cache eviction
         if len(_IMG_CACHE) > 5: _IMG_CACHE.clear() # Lower limit for GIFs
+
+        # Memory Safety: Cap frames
+        if is_animated and len(result) > 100:
+            result = result[:100] # Limit to first 100 frames to prevent OOM
+
         _IMG_CACHE[key] = result
         return result
     except Exception: return []
@@ -280,6 +270,13 @@ class Renderer:
 
         # Stars
         if state['stars']:
+            # Adjust star count based on resolution
+            target_stars = min(300, max(50, (w * h) // 100))
+            if len(self.stars_list) < target_stars:
+                self.stars_list.extend([Star() for _ in range(target_stars - len(self.stars_list))])
+            elif len(self.stars_list) > target_stars:
+                self.stars_list = self.stars_list[:target_stars]
+
             for star in self.stars_list:
                 star.move(0.02 + (audio.volume * 0.01))
                 if star.z > 0:
@@ -357,27 +354,16 @@ class Renderer:
              mid = w // 2
              is_odd = (w % 2 != 0)
 
-             for y in range(h):
-                 # Copy 0..mid to right side
-                 left_part = buf[y][:mid]
+             def apply_mirror(row_data):
+                 left_part = row_data[:mid]
                  right_part = left_part[::-1]
-
                  if is_odd:
-                     # Preserve center column
-                     center_col = [buf[y][mid]]
-                     buf[y] = left_part + center_col + right_part
-                 else:
-                     buf[y] = left_part + right_part
+                     return left_part + [row_data[mid]] + right_part
+                 return left_part + right_part
 
-                 # Same for colors
-                 left_c = cbf[y][:mid]
-                 right_c = left_c[::-1]
-
-                 if is_odd:
-                     center_c = [cbf[y][mid]]
-                     cbf[y] = left_c + center_c + right_c
-                 else:
-                     cbf[y] = left_c + right_c
+             for y in range(h):
+                 buf[y] = apply_mirror(buf[y])
+                 cbf[y] = apply_mirror(cbf[y])
 
         # Text Overlay
         if state['text_on']:
@@ -500,11 +486,16 @@ class Renderer:
         """
         Main loop using Rich Live
         """
-        with Live(console=self.console, refresh_per_second=30, screen=True) as live:
+        # Note: Live refresh rate is just for terminal update capping.
+        # We control actual frame generation speed manually.
+        with Live(console=self.console, refresh_per_second=60, screen=True) as live:
             while True:
+                t0 = time.time()
                 try:
                     # Update State
                     state = state_provider()
+                    fps = state.get('fps', 30)
+                    if fps <= 0: fps = 30
 
                     # Dimensions
                     w = self.console.width
@@ -515,7 +506,7 @@ class Renderer:
 
                     # HUD
                     vol_bar = "#" * int(min(20, audio_provider.volume))
-                    hud_text = Text(f"DEVICE: {audio_provider.connected_device:<30} | VOL: {vol_bar:<20} | STATE: {audio_provider.status} | FPS: 30", style="bold white on black")
+                    hud_text = Text(f"DEVICE: {audio_provider.connected_device:<30} | VOL: {vol_bar:<20} | STATE: {audio_provider.status} | FPS: {fps}", style="bold white on black")
 
                     # Layout
                     layout = Layout()
@@ -525,10 +516,15 @@ class Renderer:
                     )
 
                     live.update(layout)
+
+                    # Frame Pacing
+                    dt = time.time() - t0
+                    wait = (1.0 / fps) - dt
+                    if wait > 0:
+                        time.sleep(wait)
+
                 except Exception as e:
                     # Log error but don't crash
                     error_text = Text(f"RENDER ERROR: {e}", style="bold red")
                     live.update(Panel(error_text, title="Error"))
                     time.sleep(1)
-
-                time.sleep(0.001)
