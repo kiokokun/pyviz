@@ -7,7 +7,7 @@ import os
 import sys
 import shutil
 import subprocess
-from config import CONFIG_FILE, DEFAULT_STATE, THEMES
+from config import CONFIG_FILE, DEFAULT_STATE, THEMES, CHAR_SETS
 from logger import setup_logger
 
 logger = setup_logger("TUI")
@@ -99,6 +99,10 @@ class PyVizController(App):
                         yield Label("Visual Style")
                         yield Select([("Char", "2"), ("Block", "1"), ("Line", "0")], id="style_select")
 
+                        yield Label("Character Preset")
+                        char_opts = [(k, v) for k, v in CHAR_SETS.items()]
+                        yield Select(char_opts, id="char_preset_select", prompt="Select Preset")
+
                         yield Label("Bar Characters")
                         yield Input(value="  ▂▃▄▅▆▇█", id="bar_chars_input")
 
@@ -135,6 +139,46 @@ class PyVizController(App):
                         yield Label("Auto Gain")
                         yield Switch(value=True, id="gain_switch")
 
+            with TabPane("Advanced", id="tab_adv"):
+                with ScrollableContainer():
+                    with Vertical(classes="box"):
+                        yield Label("Advanced Audio")
+                        yield Label("Rise Speed")
+                        yield Input(value="0.6", id="rise_input", classes="adjust-input")
+
+                        yield Label("Bass Threshold")
+                        yield Input(value="0.7", id="bass_input", classes="adjust-input")
+
+                    with Vertical(classes="box"):
+                        yield Label("Advanced Visuals")
+                        yield Label("Peak Gravity")
+                        yield Input(value="0.15", id="peak_grav_input", classes="adjust-input")
+
+                        yield Label("Glitch Intensity")
+                        yield Input(value="0.0", id="glitch_input", classes="adjust-input")
+
+            with TabPane("Images", id="tab_images"):
+                with ScrollableContainer():
+                    with Vertical(classes="box"):
+                        yield Label("Background Image")
+                        yield Input(placeholder="Path to image...", id="bg_img_path")
+                        with Horizontal(classes="control-row"):
+                            yield Label("Enabled", classes="control-label")
+                            yield Switch(value=False, id="bg_img_switch")
+                        with Horizontal(classes="control-row"):
+                            yield Label("Flip", classes="control-label")
+                            yield Switch(value=False, id="bg_img_flip")
+
+                    with Vertical(classes="box"):
+                        yield Label("Foreground Image (Texture)")
+                        yield Input(placeholder="Path to image...", id="fg_img_path")
+                        with Horizontal(classes="control-row"):
+                            yield Label("Enabled", classes="control-label")
+                            yield Switch(value=False, id="fg_img_switch")
+                        with Horizontal(classes="control-row"):
+                            yield Label("Flip", classes="control-label")
+                            yield Switch(value=False, id="fg_img_flip")
+
             with TabPane("Text & AFK", id="tab_text"):
                 with ScrollableContainer():
                     with Vertical(classes="box"):
@@ -148,6 +192,13 @@ class PyVizController(App):
                         with Horizontal(classes="control-row"):
                             yield Label("Glitch Text", classes="control-label")
                             yield Switch(value=False, id="text_glitch_switch")
+
+                        with Horizontal(classes="control-row"):
+                            yield Label("Scroll Text", classes="control-label")
+                            yield Switch(value=False, id="text_scroll_switch")
+
+                        yield Label("Text Position Y (0.0-1.0)")
+                        yield Input(value="0.5", id="text_pos_input", classes="adjust-input")
 
                         yield Label("Text Font")
                         # "Tiny":"term", "Standard":"standard", "Big":"big", "Slant":"slant", "Block":"block", "Lean":"lean"
@@ -209,10 +260,26 @@ class PyVizController(App):
         self.query_one("#noise_input", Input).value = str(self.state.get('noise_floor', -60.0))
         self.query_one("#gain_switch", Switch).value = self.state.get('auto_gain', True)
 
+        # Advanced
+        self.query_one("#rise_input", Input).value = str(self.state.get('rise_speed', 0.6))
+        self.query_one("#bass_input", Input).value = str(self.state.get('bass_thresh', 0.7))
+        self.query_one("#peak_grav_input", Input).value = str(self.state.get('peak_gravity', 0.15))
+        self.query_one("#glitch_input", Input).value = str(self.state.get('glitch', 0.0))
+
+        # Images
+        self.query_one("#bg_img_path", Input).value = self.state.get('img_bg_path', '')
+        self.query_one("#bg_img_switch", Switch).value = self.state.get('img_bg_on', False)
+        self.query_one("#bg_img_flip", Switch).value = self.state.get('img_bg_flip', False)
+        self.query_one("#fg_img_path", Input).value = self.state.get('img_fg_path', '')
+        self.query_one("#fg_img_switch", Switch).value = self.state.get('img_fg_on', False)
+        self.query_one("#fg_img_flip", Switch).value = self.state.get('img_fg_flip', False)
+
         # Text
         self.query_one("#text_input", Input).value = self.state.get('text_str', '')
         self.query_one("#text_switch", Switch).value = self.state.get('text_on', True)
         self.query_one("#text_glitch_switch", Switch).value = self.state.get('text_glitch', False)
+        self.query_one("#text_scroll_switch", Switch).value = self.state.get('text_scroll', False)
+        self.query_one("#text_pos_input", Input).value = str(self.state.get('text_pos_y', 0.5))
         self.query_one("#font_select", Select).value = self.state.get('text_font', 'Standard')
 
         self.query_one("#afk_switch", Switch).value = self.state.get('afk_enabled', True)
@@ -275,6 +342,11 @@ class PyVizController(App):
             self.state['style'] = int(val)
         elif sid == "font_select":
             self.state['text_font'] = str(val)
+        elif sid == "char_preset_select":
+            # Update bar_chars based on preset
+            # Value is the chars themselves
+            self.state['bar_chars'] = str(val)
+            self.query_one("#bar_chars_input", Input).value = str(val)
 
         self.save_state()
 
@@ -288,6 +360,10 @@ class PyVizController(App):
             self.state['bar_chars'] = val
         elif iid == "afk_text_input":
             self.state['afk_text'] = val
+        elif iid == "bg_img_path":
+            self.state['img_bg_path'] = val
+        elif iid == "fg_img_path":
+            self.state['img_fg_path'] = val
         elif iid == "afk_timeout_input":
             try: self.state['afk_timeout'] = int(val)
             except: pass
@@ -295,10 +371,8 @@ class PyVizController(App):
         elif iid == "sens_input":
             try:
                 self.state['sens'] = float(val)
-                # Clear error style if valid
                 self.query_one("#sens_input", Input).classes = "adjust-input"
             except:
-                # Mark invalid
                 self.query_one("#sens_input", Input).classes = "adjust-input input-error"
         elif iid == "grav_input":
             try: self.state['gravity'] = float(val)
@@ -308,6 +382,21 @@ class PyVizController(App):
             except: pass
         elif iid == "noise_input":
             try: self.state['noise_floor'] = float(val)
+            except: pass
+        elif iid == "rise_input":
+            try: self.state['rise_speed'] = float(val)
+            except: pass
+        elif iid == "bass_input":
+            try: self.state['bass_thresh'] = float(val)
+            except: pass
+        elif iid == "peak_grav_input":
+            try: self.state['peak_gravity'] = float(val)
+            except: pass
+        elif iid == "glitch_input":
+            try: self.state['glitch'] = float(val)
+            except: pass
+        elif iid == "text_pos_input":
+            try: self.state['text_pos_y'] = float(val)
             except: pass
 
         self.save_state()
@@ -321,8 +410,13 @@ class PyVizController(App):
         elif sid == "mirror_switch": self.state['mirror'] = val
         elif sid == "text_switch": self.state['text_on'] = val
         elif sid == "text_glitch_switch": self.state['text_glitch'] = val
+        elif sid == "text_scroll_switch": self.state['text_scroll'] = val
         elif sid == "afk_switch": self.state['afk_enabled'] = val
         elif sid == "gain_switch": self.state['auto_gain'] = val
+        elif sid == "bg_img_switch": self.state['img_bg_on'] = val
+        elif sid == "bg_img_flip": self.state['img_bg_flip'] = val
+        elif sid == "fg_img_switch": self.state['img_fg_on'] = val
+        elif sid == "fg_img_flip": self.state['img_fg_flip'] = val
 
         self.save_state()
 
