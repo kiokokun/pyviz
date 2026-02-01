@@ -413,6 +413,10 @@ class PyVizController(App):
         except Exception: pass
 
     def set_ui_theme(self, theme_name: str):
+        # Safe fallback
+        if theme_name not in UI_THEMES:
+            theme_name = "Default"
+
         if theme_name in UI_THEMES:
             t_data = UI_THEMES[theme_name]
             self.title = t_data["title"]

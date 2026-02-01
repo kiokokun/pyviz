@@ -79,6 +79,11 @@ def process_image(path: str, w: int, h: int) -> Union[List[List[Tuple[int, int, 
 
         # Simple cache eviction
         if len(_IMG_CACHE) > 5: _IMG_CACHE.clear() # Lower limit for GIFs
+
+        # Memory Safety: Cap frames
+        if is_animated and len(result) > 100:
+            result = result[:100] # Limit to first 100 frames to prevent OOM
+
         _IMG_CACHE[key] = result
         return result
     except Exception: return []

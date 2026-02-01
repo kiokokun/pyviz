@@ -8,9 +8,18 @@ class GlitchEffect(BaseEffect):
         self.duration = 0
 
     def update(self, state, audio_data):
-        if audio_data.is_beat and random.random() < 0.3: # 30% chance on beat
+        intensity = float(state.get('glitch', 0.0))
+        if intensity <= 0:
+            self.active = False
+            return
+
+        # Scale chance by intensity (0.0 to 1.0)
+        # Base chance 30% at max intensity
+        chance = 0.3 * intensity
+
+        if audio_data.is_beat and random.random() < chance:
             self.active = True
-            self.duration = 3 # frames
+            self.duration = 3
 
         if self.duration > 0:
             self.duration -= 1

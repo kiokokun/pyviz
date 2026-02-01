@@ -61,6 +61,9 @@ def run_engine():
                 audio.set_device(self.state['dev_name'])
                 self.last_dev_name = self.state['dev_name']
 
+            # Push beat threshold
+            audio.set_config(self.state.get('bass_thresh', 0.7))
+
             return self.state
 
     manager = StateManager()

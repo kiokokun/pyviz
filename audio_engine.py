@@ -41,9 +41,16 @@ class AudioPump(threading.Thread):
         self.beat_confidence: float = 0.0
         self.last_beat_time: float = 0.0
         self.energy_history: List[float] = []
+        self.beat_thresh: float = 1.4 # Default
 
         self.sd = sd if AUDIO_AVAILABLE else None
         self.np = np if AUDIO_AVAILABLE else None
+
+    def set_config(self, bass_thresh: float) -> None:
+        """Update audio engine config safely."""
+        try:
+            self.beat_thresh = 1.0 + float(bass_thresh) # 0.7 -> 1.7 threshold
+        except Exception: pass
 
     def set_device(self, dev_name: str) -> None:
         with self.lock:
@@ -156,8 +163,8 @@ class AudioPump(threading.Thread):
 
                                 avg_energy = sum(self.energy_history) / len(self.energy_history)
 
-                                # Threshold: Instant energy > 1.3x average
-                                if bass_energy > avg_energy * 1.4 and (curr_time - self.last_beat_time) > 0.3:
+                                # Threshold: Instant energy > Thresh * average
+                                if bass_energy > avg_energy * self.beat_thresh and (curr_time - self.last_beat_time) > 0.3:
                                     self.is_beat = True
                                     self.beat_confidence = min(1.0, (bass_energy / (avg_energy + 1e-5)) - 1.0)
                                     self.last_beat_time = curr_time
