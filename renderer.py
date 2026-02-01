@@ -4,6 +4,8 @@ import time
 from typing import List, Tuple, Any, Callable, Optional, Union
 from config import THEMES, FONT_MAP, CHAR_SETS
 from effects.glitch import GlitchEffect
+from effects.matrix import MatrixEffect
+from effects.pong import PongEffect
 from rich.live import Live
 from rich.layout import Layout
 from rich.text import Text
@@ -139,7 +141,7 @@ class Renderer:
         self.peak_heights: Any = np.zeros(100) if np else []
         self.stars_list: List[Star] = [Star() for _ in range(100)]
 
-        self.effects: List[Any] = [GlitchEffect()]
+        self.effects: List[Any] = [GlitchEffect(), MatrixEffect(), PongEffect()]
 
         self.buf_bg: Any = [] # List or List[List]
         self.buf_fg: Any = []
@@ -198,12 +200,36 @@ class Renderer:
         self.frame_idx += 1
 
         # F. Process Audio Data
-        indices = np.linspace(0, 1023, w).astype(int)
+        # STEREO LOGIC HERE
+        is_stereo = state.get('stereo', False) and hasattr(audio, 'raw_fft_left')
 
-        if len(audio.raw_fft) == 1024:
-            raw_db = audio.raw_fft[indices]
+        if is_stereo:
+            # Stereo Split
+            mid = w // 2
+            left_w = mid
+            right_w = w - mid
+
+            raw_l = audio.raw_fft_left
+            raw_r = audio.raw_fft_right
+            if len(raw_l) == 0: raw_l = np.zeros(1024) - 100
+            if len(raw_r) == 0: raw_r = np.zeros(1024) - 100
+
+            # Resample
+            idx_l = np.linspace(0, 1023, left_w).astype(int)
+            idx_r = np.linspace(0, 1023, right_w).astype(int)
+
+            db_l = raw_l[idx_l]
+            db_r = raw_r[idx_r]
+
+            # Combine: Left then Right
+            raw_db = np.concatenate((db_l, db_r))
         else:
-            raw_db = np.zeros(w) - 100
+            indices = np.linspace(0, 1023, w).astype(int)
+
+            if len(audio.raw_fft) == 1024:
+                raw_db = audio.raw_fft[indices]
+            else:
+                raw_db = np.zeros(w) - 100
 
         floor = state.get('noise_floor', -60.0)
         if floor == 0: floor = -0.001 # Prevent DivZero

@@ -8,6 +8,12 @@ import os
 import sys
 import shutil
 import subprocess
+import time
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
 from config import CONFIG_FILE, DEFAULT_STATE, THEMES, CHAR_SETS
 from logger import setup_logger
 
@@ -240,32 +246,33 @@ class PyVizController(App):
             with TabbedContent():
                 # TAB 1: Main (Audio, Sens, Theme)
                 with TabPane("Main", id="tab_main"):
-                with Vertical(classes="box"):
-                    yield Label("Audio Source")
-                    yield Select([], id="dev_select", prompt="Select Input Device", tooltip="Select the audio input device (requires restart if engine running)")
-                    yield Button("Refresh Devices", id="refresh_dev", variant="primary", tooltip="Reload list of audio devices")
+                    with Vertical(classes="box"):
+                        yield Label("Audio Source")
+                        yield Select([], id="dev_select", prompt="Select Input Device", tooltip="Select the audio input device (requires restart if engine running)")
+                        yield Button("Refresh Devices", id="refresh_dev", variant="primary", tooltip="Reload list of audio devices")
 
-                with Vertical(classes="box"):
-                    yield Label("Preset Manager")
-                    with Horizontal():
-                        yield Button("Load Preset", id="load_preset_btn", variant="primary")
-                        yield Button("Save Preset", id="save_preset_btn", variant="success")
+                    with Vertical(classes="box"):
+                        yield Label("Preset Manager")
+                        with Horizontal():
+                            yield Button("Load Preset", id="load_preset_btn", variant="primary")
+                            yield Button("Save Preset", id="save_preset_btn", variant="success")
 
-                with Vertical(classes="box"):
-                    yield Label("Sensitivity")
-                    with Horizontal(classes="adjust-row"):
-                        yield Button("-", id="sens_down", classes="adjust-btn")
-                        yield Input(value="1.0", id="sens_input", classes="adjust-input", tooltip="Microphone sensitivity multiplier")
-                        yield Button("+", id="sens_up", classes="adjust-btn")
+                    with Vertical(classes="box"):
+                        yield Label("Sensitivity")
+                        with Horizontal(classes="adjust-row"):
+                            yield Button("-", id="sens_down", classes="adjust-btn")
+                            yield Input(value="1.0", id="sens_input", classes="adjust-input", tooltip="Microphone sensitivity multiplier")
+                            yield Button("+", id="sens_up", classes="adjust-btn")
 
-                    yield Label("Theme")
-                    yield Select([(k, k) for k in THEMES.keys()], id="theme_select", tooltip="Color palette for the visualizer")
+                        yield Label("Theme")
+                        yield Select([(k, k) for k in THEMES.keys()], id="theme_select", tooltip="Color palette for the visualizer")
+                        yield Static(" PREVIEW ", id="theme_preview", classes="adjust-input")
 
-                    yield Label("UI Theme (Controller)")
-                    ui_opts = [(k, k) for k in UI_THEMES.keys()]
-                    yield Select(ui_opts, id="ui_theme_select", value="Default", tooltip="Theme for this settings window")
+                        yield Label("UI Theme (Controller)")
+                        ui_opts = [(k, k) for k in UI_THEMES.keys()]
+                        yield Select(ui_opts, id="ui_theme_select", value="Default", tooltip="Theme for this settings window")
 
-                yield Button("RESET TO DEFAULTS", id="reset_btn", variant="error", tooltip="Reset all settings to factory defaults")
+                    yield Button("RESET TO DEFAULTS", id="reset_btn", variant="error", tooltip="Reset all settings to factory defaults")
 
             # TAB 2: Bars (Styles, Mirror, Physics for bars)
             with TabPane("Bars", id="tab_bars"):
@@ -284,6 +291,10 @@ class PyVizController(App):
                         with Horizontal(classes="control-row"):
                             yield Label("Mirror Mode", classes="control-label")
                             yield Switch(value=False, id="mirror_switch", tooltip="Mirror the visualization horizontally")
+
+                        with Horizontal(classes="control-row"):
+                            yield Label("Stereo Mode", classes="control-label")
+                            yield Switch(value=False, id="stereo_switch", tooltip="Split visualization into Left and Right channels")
 
                         with Horizontal(classes="control-row"):
                             yield Label("Show Peaks", classes="control-label")
@@ -377,8 +388,23 @@ class PyVizController(App):
                         yield Label("Glitch Intensity")
                         yield Input(value="0.0", id="glitch_input", classes="adjust-input", tooltip="Random visual glitch effect intensity")
 
+                        with Horizontal(classes="control-row"):
+                            yield Label("Matrix Rain", classes="control-label")
+                            yield Switch(value=False, id="matrix_switch")
+
+                        with Horizontal(classes="control-row"):
+                            yield Label("Pong Mode", classes="control-label")
+                            yield Switch(value=False, id="pong_switch")
+
                         yield Label("Target FPS")
                         yield Input(value="30", id="fps_input", classes="adjust-input", tooltip="Target Frames Per Second (default 30)")
+
+                    with Vertical(classes="box"):
+                        yield Label("System Monitor")
+                        with Horizontal(classes="control-row"):
+                            yield Label("Show CPU", classes="control-label")
+                            yield Switch(value=False, id="cpu_switch")
+                        yield Static("CPU: --%", id="cpu_widget")
 
             with TabPane("Text & AFK", id="tab_text"):
                 with ScrollableContainer():
@@ -437,6 +463,37 @@ class PyVizController(App):
     def on_mount(self) -> None:
         self.load_state_from_file()
         self.refresh_devices()
+        self.set_interval(2.0, self.update_cpu)
+
+    def update_cpu(self):
+        try:
+            # Check switch state (only if widget exists)
+            try:
+                switch = self.query_one("#cpu_switch", Switch)
+                if not switch.value:
+                    return
+            except: return
+
+            if psutil:
+                cpu = psutil.cpu_percent()
+                self.query_one("#cpu_widget", Static).update(f"CPU: {cpu}%")
+            else:
+                self.query_one("#cpu_widget", Static).update("CPU: (psutil missing)")
+        except: pass
+
+    def update_theme_preview(self, theme_name: str):
+        try:
+            theme = THEMES.get(theme_name, THEMES['Vaporeon'])
+            start = theme[0]
+            end = theme[1]
+            s_rgb = f"rgb({start[0]},{start[1]},{start[2]})"
+            e_rgb = f"rgb({end[0]},{end[1]},{end[2]})"
+
+            widget = self.query_one("#theme_preview", Static)
+            widget.styles.background = s_rgb
+            widget.styles.color = e_rgb
+            widget.update(f" PREVIEW: {theme_name} ")
+        except Exception: pass
 
     def debug(self, msg: str):
         try:
@@ -467,6 +524,7 @@ class PyVizController(App):
         self.query_one("#sens_input", Input).value = str(self.state.get('sens', 1.0))
         theme_sel = self.query_one("#theme_select", Select)
         theme_sel.value = self.state.get('theme_name', 'Vaporeon')
+        self.update_theme_preview(self.state.get('theme_name', 'Vaporeon'))
 
         # Restore UI Theme (if we saved it, or just default)
         ui_theme = self.state.get('ui_theme', 'Default')
@@ -481,6 +539,7 @@ class PyVizController(App):
         self.query_one("#stars_switch", Switch).value = self.state.get('stars', True)
         self.query_one("#peaks_switch", Switch).value = self.state.get('peaks_on', True)
         self.query_one("#mirror_switch", Switch).value = self.state.get('mirror', False)
+        self.query_one("#stereo_switch", Switch).value = self.state.get('stereo', False)
 
         self.query_one("#grav_input", Input).value = str(self.state.get('gravity', 0.25))
         self.query_one("#smooth_input", Input).value = str(self.state.get('smoothing', 0.15))
@@ -492,6 +551,8 @@ class PyVizController(App):
         self.query_one("#bass_input", Input).value = str(self.state.get('bass_thresh', 0.7))
         self.query_one("#peak_grav_input", Input).value = str(self.state.get('peak_gravity', 0.15))
         self.query_one("#glitch_input", Input).value = str(self.state.get('glitch', 0.0))
+        self.query_one("#matrix_switch", Switch).value = self.state.get('matrix_rain', False)
+        self.query_one("#pong_switch", Switch).value = self.state.get('pong_mode', False)
         self.query_one("#fps_input", Input).value = str(self.state.get('fps', 30))
 
         # Images
@@ -675,6 +736,7 @@ class PyVizController(App):
 
         if sid == "theme_select":
             self.state['theme_name'] = str(val)
+            self.update_theme_preview(str(val))
         elif sid == "dev_select":
             self.state['dev_name'] = str(val)
         elif sid == "style_select":
@@ -770,6 +832,8 @@ class PyVizController(App):
         elif sid == "text_scroll_switch": self.state['text_scroll'] = val
         elif sid == "afk_switch": self.state['afk_enabled'] = val
         elif sid == "gain_switch": self.state['auto_gain'] = val
+        elif sid == "matrix_switch": self.state['matrix_rain'] = val
+        elif sid == "pong_switch": self.state['pong_mode'] = val
         elif sid == "bg_img_switch": self.state['img_bg_on'] = val
         elif sid == "bg_img_flip": self.state['img_bg_flip'] = val
         elif sid == "fg_img_switch": self.state['img_fg_on'] = val
