@@ -393,6 +393,28 @@ class PyVizController(App):
                     self.state['img_fg_path'] = path
                 self.save_state()
 
+        # Try Native Picker (Windows/Desktop)
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+
+            root = tk.Tk()
+            root.withdraw() # Hide main window
+            root.attributes('-topmost', True) # Bring to front
+
+            path = filedialog.askopenfilename(
+                title="Select Image",
+                filetypes=[("Images", "*.png;*.jpg;*.jpeg;*.gif;*.bmp"), ("All Files", "*.*")]
+            )
+            root.destroy()
+
+            if path:
+                set_file(path)
+            return
+        except Exception as e:
+            logger.warning(f"Native file picker failed ({e}), falling back to TUI.")
+
+        # Fallback to TUI Picker
         self.push_screen(FileOpenScreen(), set_file)
 
     def on_select_changed(self, event: Select.Changed) -> None:
