@@ -277,6 +277,12 @@ class PyVizController(App):
                         char_opts = [(k, k) for k in CHAR_SETS.keys()]
                         yield Select(char_opts, id="img_preset_select")
 
+                        yield Label("Transparency Threshold")
+                        with Horizontal(classes="adjust-row"):
+                             yield Button("-", id="img_thresh_down", classes="adjust-btn")
+                             yield Input(value="0.05", id="img_thresh_input", classes="adjust-input", tooltip="Luminance cutoff for transparency (0.0-1.0)")
+                             yield Button("+", id="img_thresh_up", classes="adjust-btn")
+
                     with Vertical(classes="box"):
                         yield Label("Foreground Image (Texture)")
                         with Horizontal():
@@ -394,6 +400,7 @@ class PyVizController(App):
 
         self.query_one("#img_style_select", Select).value = str(self.state.get('img_style', 2))
         self.query_one("#img_preset_select", Select).value = self.state.get('img_char_set', 'Blocks')
+        self.query_one("#img_thresh_input", Input).value = str(self.state.get('img_thresh', 0.05))
 
         self.query_one("#fg_img_path", Input).value = self.state.get('img_fg_path', '')
         self.query_one("#fg_img_switch", Switch).value = self.state.get('img_fg_on', False)
@@ -478,6 +485,14 @@ class PyVizController(App):
             self.sync_ui_to_state()
             self.save_state()
             self.notify("Reset to defaults!", severity="information")
+        elif bid == "img_thresh_up":
+            self.state['img_thresh'] = round(min(0.95, self.state.get('img_thresh', 0.05) + 0.05), 2)
+            self.query_one("#img_thresh_input", Input).value = str(self.state['img_thresh'])
+            self.save_state()
+        elif bid == "img_thresh_down":
+            self.state['img_thresh'] = round(max(0.0, self.state.get('img_thresh', 0.05) - 0.05), 2)
+            self.query_one("#img_thresh_input", Input).value = str(self.state['img_thresh'])
+            self.save_state()
 
     def open_file_picker(self, target: str):
         def set_file(path: str | None):
@@ -597,6 +612,9 @@ class PyVizController(App):
             except: pass
         elif iid == "fps_input":
             try: self.state['fps'] = int(val)
+            except: pass
+        elif iid == "img_thresh_input":
+            try: self.state['img_thresh'] = float(val)
             except: pass
 
         self.save_state()
