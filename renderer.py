@@ -2,7 +2,7 @@ import os
 import random
 import time
 from typing import List, Tuple, Any, Callable, Optional, Union
-from config import THEMES, FONT_MAP
+from config import THEMES, FONT_MAP, CHAR_SETS
 from effects.glitch import GlitchEffect
 from rich.live import Live
 from rich.layout import Layout
@@ -29,10 +29,10 @@ WHITE = (255, 255, 255)
 
 # Helpers
 _IMG_CACHE = {}
-def process_image(path: str, w: int, h: int) -> Union[List[List[Tuple[str, Tuple[int, int, int]]]], List[List[List[Tuple[str, Tuple[int, int, int]]]]]]:
+def process_image(path: str, w: int, h: int) -> Union[List[List[Tuple[int, int, int]]], List[List[List[Tuple[int, int, int]]]]]:
     """
     Returns either a single buffer (static image) or a list of buffers (animated GIF).
-    Buffer = List of Rows, Row = List of (Char, RGB).
+    Buffer = List of Rows, Row = List of RGB Tuples (No Chars yet).
     """
     key = (path, w, h)
     if key in _IMG_CACHE: return _IMG_CACHE[key]
@@ -56,9 +56,24 @@ def process_image(path: str, w: int, h: int) -> Union[List[List[Tuple[str, Tuple
                 row = []
                 for x in range(w):
                     r,g,b = px[x,y]
-                    row.append((".", (r,g,b)))
-                new_buf.append(row)
-            frames.append(new_buf)
+                    new_buf.append((r,g,b))
+                frames.append([new_buf[i:i+w] for i in range(0, len(new_buf), w)])
+            # Wait, logic above is convoluted. Simplify.
+
+        # Proper Loop
+        frames = []
+        frame_iter = ImageSequence.Iterator(im) if is_animated else [im]
+        for frame in frame_iter:
+            f_img = frame.copy().resize((w, h)).convert("RGB")
+            px = f_img.load()
+            frame_buf = []
+            for y in range(h):
+                row = []
+                for x in range(w):
+                    r,g,b = px[x,y]
+                    row.append((r,g,b))
+                frame_buf.append(row)
+            frames.append(frame_buf)
 
         result = frames if is_animated else frames[0]
 
@@ -230,38 +245,38 @@ class Renderer:
             # Handle Animation
             cur_bg = self.buf_bg
 
-            # Heuristic check for 3D array (Animation: [Frames][Rows][Pixels])
-            # Normal buffer: [Rows][Pixels]
-            # Pixel is Tuple. Row is List. Buffer is List.
-            # Animated: List[List[List[Tuple]]]
-            # Static: List[List[Tuple]]
-
+            # Heuristic: [Frames][Rows][RGB] vs [Rows][RGB]
             is_animated = False
             if len(cur_bg) > 0 and isinstance(cur_bg[0], list):
-                # cur_bg[0] is a Row (Static) or a Frame (Animated)
                 if len(cur_bg[0]) > 0 and isinstance(cur_bg[0][0], list):
-                     # If the item inside the first list is a LIST, it's a ROW inside a FRAME.
                      is_animated = True
 
             if is_animated:
-                # It's a list of frames
-                idx = (self.frame_idx // 2) % len(cur_bg) # Slow down GIF slightly
+                idx = (self.frame_idx // 2) % len(cur_bg)
                 cur_bg = cur_bg[idx]
+
+            # Prepare Char Set
+            img_style = state.get('img_style', 2)
+            img_chars = CHAR_SETS.get(state.get('img_char_set', 'Blocks'), CHAR_SETS['Blocks'])
 
             for y in range(h):
                 for x in range(w):
-                    # Check bounds
                     if y < len(cur_bg):
                         row = cur_bg[y]
                         if x < len(row):
-                            res = row[x]
-                            # res is (char, rgb)
-                            if state['style'] != 0:
-                                cbf[y][x] = col_style(res[1])
-                                buf[y][x] = res[0]
-                            else:
-                                cbf[y][x] = col_style(WHITE, res[1])
+                            rgb = row[x]
+
+                            if img_style == 1: # Block (Background color)
+                                cbf[y][x] = col_style(WHITE, rgb)
                                 buf[y][x] = " "
+                            else: # Char (Foreground color)
+                                # Calculate Luminance
+                                lum = (0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2]) / 255.0
+                                char_idx = int(lum * (len(img_chars) - 1))
+                                char_idx = max(0, min(char_idx, len(img_chars)-1))
+
+                                cbf[y][x] = col_style(rgb, BLACK)
+                                buf[y][x] = img_chars[char_idx]
 
         # Stars
         if state['stars']:
