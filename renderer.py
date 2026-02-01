@@ -145,6 +145,8 @@ class Renderer:
         self.buf_fg: Any = []
         self.last_w: int = 0
         self.last_h: int = 0
+        self.last_bg_path: str = ""
+        self.last_fg_path: str = ""
         self.frame_idx = 0
         self.console = Console()
 
@@ -178,11 +180,19 @@ class Renderer:
             self.bands = np.zeros(w)
             self.peak_heights = np.zeros(w)
 
-        # E. Reload Images (Logical Width)
-        if w != self.last_w or h != self.last_h:
+        # E. Reload Images (Logical Width OR Path Changed)
+        reload_images = False
+        if (w != self.last_w or h != self.last_h): reload_images = True
+        if (state['img_bg_path'] != self.last_bg_path): reload_images = True
+        if (state['img_fg_path'] != self.last_fg_path): reload_images = True
+
+        if reload_images:
             if state['img_bg_path']: self.buf_bg = process_image(state['img_bg_path'], w, h)
             if state['img_fg_path']: self.buf_fg = process_image(state['img_fg_path'], w, h)
+
             self.last_w, self.last_h = w, h
+            self.last_bg_path = state['img_bg_path']
+            self.last_fg_path = state['img_fg_path']
 
         # Cycle frames (approx 30fps base)
         self.frame_idx += 1
