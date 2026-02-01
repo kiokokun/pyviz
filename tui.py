@@ -78,9 +78,13 @@ class FileOpenScreen(ModalScreen[str]):
     """Modal screen for selecting a file."""
 
     def compose(self) -> ComposeResult:
+        start_path = os.path.expanduser("~")
+        if not os.path.exists(start_path):
+            start_path = "/" # Fallback
+
         with Vertical(id="file_dialog"):
             yield Label("Select Image File", id="file_title")
-            yield DirectoryTree(os.getcwd(), id="tree")
+            yield DirectoryTree(start_path, id="tree")
             with Horizontal():
                 yield Button("Cancel", id="cancel_btn", variant="error")
 
