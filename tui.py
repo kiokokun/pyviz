@@ -1,6 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.containers import Vertical, Horizontal, ScrollableContainer
-from textual.widgets import Header, Footer, Button, Label, Select, Input, Static, TabbedContent, TabPane, Switch
+from textual.widgets import Header, Footer, Button, Label, Select, Input, Static, TabbedContent, TabPane, Switch, DirectoryTree
+from textual.screen import ModalScreen
 from textual.reactive import reactive
 import json
 import os
@@ -61,7 +62,34 @@ Switch {
 .input-error {
     border: solid red;
 }
+/* File Picker */
+FileOpenScreen {
+    align: center middle;
+}
+#file_dialog {
+    width: 80%;
+    height: 80%;
+    border: thick $accent;
+    background: $surface;
+}
 """
+
+class FileOpenScreen(ModalScreen[str]):
+    """Modal screen for selecting a file."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="file_dialog"):
+            yield Label("Select Image File", id="file_title")
+            yield DirectoryTree(os.getcwd(), id="tree")
+            with Horizontal():
+                yield Button("Cancel", id="cancel_btn", variant="error")
+
+    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+        self.dismiss(str(event.path))
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel_btn":
+            self.dismiss(None)
 
 class PyVizController(App):
     """
@@ -161,7 +189,10 @@ class PyVizController(App):
                 with ScrollableContainer():
                     with Vertical(classes="box"):
                         yield Label("Background Image")
-                        yield Input(placeholder="Path to image...", id="bg_img_path")
+                        with Horizontal():
+                            yield Input(placeholder="Path to image...", id="bg_img_path", classes="adjust-input")
+                            yield Button("Browse", id="bg_browse_btn", classes="adjust-btn")
+
                         with Horizontal(classes="control-row"):
                             yield Label("Enabled", classes="control-label")
                             yield Switch(value=False, id="bg_img_switch")
@@ -171,7 +202,10 @@ class PyVizController(App):
 
                     with Vertical(classes="box"):
                         yield Label("Foreground Image (Texture)")
-                        yield Input(placeholder="Path to image...", id="fg_img_path")
+                        with Horizontal():
+                            yield Input(placeholder="Path to image...", id="fg_img_path", classes="adjust-input")
+                            yield Button("Browse", id="fg_browse_btn", classes="adjust-btn")
+
                         with Horizontal(classes="control-row"):
                             yield Label("Enabled", classes="control-label")
                             yield Switch(value=False, id="fg_img_switch")
@@ -304,6 +338,10 @@ class PyVizController(App):
             self.refresh_devices()
         elif bid == "launch_btn":
             self.launch_engine()
+        elif bid == "bg_browse_btn":
+            self.open_file_picker("bg")
+        elif bid == "fg_browse_btn":
+            self.open_file_picker("fg")
         elif bid == "sens_up":
             self.state['sens'] = round(self.state.get('sens', 1.0) + 0.1, 1)
             self.query_one("#sens_input", Input).value = str(self.state['sens'])
@@ -328,6 +366,19 @@ class PyVizController(App):
             self.state['smoothing'] = round(max(0.05, self.state.get('smoothing', 0.15) - 0.05), 2)
             self.query_one("#smooth_input", Input).value = str(self.state['smoothing'])
             self.save_state()
+
+    def open_file_picker(self, target: str):
+        def set_file(path: str | None):
+            if path:
+                if target == "bg":
+                    self.query_one("#bg_img_path", Input).value = path
+                    self.state['img_bg_path'] = path
+                else:
+                    self.query_one("#fg_img_path", Input).value = path
+                    self.state['img_fg_path'] = path
+                self.save_state()
+
+        self.push_screen(FileOpenScreen(), set_file)
 
     def on_select_changed(self, event: Select.Changed) -> None:
         sid = event.select.id

@@ -11,7 +11,7 @@ from rich.panel import Panel
 from rich.console import Console
 
 try:
-    from PIL import Image # type: ignore
+    from PIL import Image, ImageSequence # type: ignore
     import numpy as np
 except ImportError:
     Image = None
@@ -29,25 +29,43 @@ WHITE = (255, 255, 255)
 
 # Helpers
 _IMG_CACHE = {}
-def process_image(path: str, w: int, h: int) -> List[List[Tuple[str, Tuple[int, int, int]]]]:
+def process_image(path: str, w: int, h: int) -> Union[List[List[Tuple[str, Tuple[int, int, int]]]], List[List[List[Tuple[str, Tuple[int, int, int]]]]]]:
+    """
+    Returns either a single buffer (static image) or a list of buffers (animated GIF).
+    Buffer = List of Rows, Row = List of (Char, RGB).
+    """
     key = (path, w, h)
     if key in _IMG_CACHE: return _IMG_CACHE[key]
 
     if not path or not os.path.exists(path): return []
     if Image is None: return []
+
     try:
-        im = Image.open(path).resize((w, h)).convert("RGB"); px = im.load(); new_buf = []
-        for y in range(h):
-            row = []
-            for x in range(w):
-                r,g,b = px[x,y]
-                row.append((".", (r,g,b)))
-            new_buf.append(row)
+        im = Image.open(path)
+
+        frames = []
+        is_animated = getattr(im, "is_animated", False)
+
+        frame_iter = ImageSequence.Iterator(im) if is_animated else [im]
+
+        for frame in frame_iter:
+            f_img = frame.copy().resize((w, h)).convert("RGB")
+            px = f_img.load()
+            new_buf = []
+            for y in range(h):
+                row = []
+                for x in range(w):
+                    r,g,b = px[x,y]
+                    row.append((".", (r,g,b)))
+                new_buf.append(row)
+            frames.append(new_buf)
+
+        result = frames if is_animated else frames[0]
 
         # Simple cache eviction
-        if len(_IMG_CACHE) > 10: _IMG_CACHE.clear()
-        _IMG_CACHE[key] = new_buf
-        return new_buf
+        if len(_IMG_CACHE) > 5: _IMG_CACHE.clear() # Lower limit for GIFs
+        _IMG_CACHE[key] = result
+        return result
     except Exception: return []
 
 # Cached gradient calculation
@@ -117,10 +135,11 @@ class Renderer:
 
         self.effects: List[Any] = [GlitchEffect()]
 
-        self.buf_bg: List[List[Tuple[str, Tuple[int, int, int]]]] = []
-        self.buf_fg: List[List[Tuple[str, Tuple[int, int, int]]]] = []
+        self.buf_bg: Any = [] # List or List[List]
+        self.buf_fg: Any = []
         self.last_w: int = 0
         self.last_h: int = 0
+        self.frame_idx = 0
         self.console = Console()
 
         # Max resolution to prevent lag on huge terminals
@@ -158,6 +177,9 @@ class Renderer:
             if state['img_bg_path']: self.buf_bg = process_image(state['img_bg_path'], w, h)
             if state['img_fg_path']: self.buf_fg = process_image(state['img_fg_path'], w, h)
             self.last_w, self.last_h = w, h
+
+        # Cycle frames (approx 30fps base)
+        self.frame_idx += 1
 
         # F. Process Audio Data
         indices = np.linspace(0, 1023, w).astype(int)
@@ -205,10 +227,17 @@ class Renderer:
 
         # BG Layer
         if state['img_bg_on'] and self.buf_bg:
+            # Handle Animation
+            cur_bg = self.buf_bg
+            if isinstance(cur_bg, list) and len(cur_bg) > 0 and isinstance(cur_bg[0], list) and isinstance(cur_bg[0][0], list):
+                # It's a list of frames
+                idx = (self.frame_idx // 2) % len(cur_bg) # Slow down GIF slightly
+                cur_bg = cur_bg[idx]
+
             for y in range(h):
                 for x in range(w):
-                    if y < len(self.buf_bg) and x < len(self.buf_bg[0]):
-                        res = self.buf_bg[y][x]
+                    if y < len(cur_bg) and x < len(cur_bg[0]):
+                        res = cur_bg[y][x]
                         if state['style'] != 0:
                             cbf[y][x] = col_style(res[1])
                             buf[y][x] = res[0]
@@ -258,8 +287,14 @@ class Renderer:
 
                 # FG Texture (if enabled, slow path)
                 if state['img_fg_on'] and self.buf_fg:
-                     if y < len(self.buf_fg) and x < len(self.buf_fg[0]):
-                         final_rgb = self.buf_fg[y][x][1]
+                     # Handle Animation
+                     cur_fg = self.buf_fg
+                     if isinstance(cur_fg, list) and len(cur_fg) > 0 and isinstance(cur_fg[0], list) and isinstance(cur_fg[0][0], list):
+                         idx = (self.frame_idx // 2) % len(cur_fg)
+                         cur_fg = cur_fg[idx]
+
+                     if y < len(cur_fg) and x < len(cur_fg[0]):
+                         final_rgb = cur_fg[y][x][1]
 
                 if style_mode == 1: # Block
                     cbf[y][x] = (WHITE, final_rgb) # BG color
