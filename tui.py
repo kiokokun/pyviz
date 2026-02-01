@@ -62,6 +62,13 @@ Switch {
 .input-error {
     border: solid red;
 }
+.debug-panel {
+    height: 3;
+    background: $surface;
+    border: solid yellow;
+    margin: 1;
+    overflow-y: scroll;
+}
 /* File Picker */
 FileOpenScreen {
     align: center middle;
@@ -165,9 +172,10 @@ class PyVizController(App):
     def compose(self) -> ComposeResult:
         yield Header()
 
-        with TabbedContent():
-            # TAB 1: Main (Audio, Sens, Theme)
-            with TabPane("Main", id="tab_main"):
+        with Vertical(id="main_content"):
+            with TabbedContent():
+                # TAB 1: Main (Audio, Sens, Theme)
+                with TabPane("Main", id="tab_main"):
                 with Vertical(classes="box"):
                     yield Label("Audio Source")
                     yield Select([], id="dev_select", prompt="Select Input Device", tooltip="Select the audio input device (requires restart if engine running)")
@@ -340,7 +348,11 @@ class PyVizController(App):
                         yield Label("AFK Timeout (sec)")
                         yield Input(value="30", id="afk_timeout_input")
 
-        yield Button(">>> LAUNCH ENGINE <<<", id="launch_btn", variant="success")
+        # Bottom Panel (Always Visible)
+        with Vertical(classes="bottom-panel"):
+            yield Static("Ready.", id="debug_log", classes="debug-panel")
+            yield Button(">>> LAUNCH ENGINE <<<", id="launch_btn", variant="success")
+
         yield Footer()
 
     def on_unmount(self) -> None:
@@ -353,6 +365,17 @@ class PyVizController(App):
     def on_mount(self) -> None:
         self.load_state_from_file()
         self.refresh_devices()
+
+    def debug(self, msg: str):
+        try:
+            log_widget = self.query_one("#debug_log", Static)
+            current = str(log_widget.renderable)
+            # Keep last 3 lines
+            lines = current.split('\n')
+            if len(lines) > 2: lines = lines[-2:]
+            lines.append(f"> {msg}")
+            log_widget.update("\n".join(lines))
+        except: pass
 
     def load_state_from_file(self):
         if not os.path.exists(CONFIG_FILE):
@@ -432,7 +455,9 @@ class PyVizController(App):
             with open(tmp_file, 'w') as f:
                 json.dump(self.state, f)
             os.replace(tmp_file, CONFIG_FILE)
-        except Exception: pass
+            self.debug("Config saved.")
+        except Exception as e:
+            self.debug(f"Save Error: {e}")
 
     def set_ui_theme(self, theme_name: str):
         # Safe fallback
@@ -456,6 +481,7 @@ class PyVizController(App):
         bid = event.button.id
         if bid == "refresh_dev":
             self.refresh_devices()
+            self.debug("Refreshed audio devices.")
         elif bid == "launch_btn":
             self.launch_engine()
         elif bid == "bg_browse_btn":
@@ -491,6 +517,7 @@ class PyVizController(App):
             self.sync_ui_to_state()
             self.save_state()
             self.notify("Reset to defaults!", severity="information")
+            self.debug("Reset to defaults.")
         elif bid == "img_thresh_up":
             self.state['img_thresh'] = round(min(0.95, self.state.get('img_thresh', 0.05) + 0.05), 2)
             self.query_one("#img_thresh_input", Input).value = str(self.state['img_thresh'])
@@ -660,8 +687,10 @@ class PyVizController(App):
             current = self.state.get('dev_name', '')
             if any(d[0] == current for d in devs):
                 select.value = current
+            self.debug(f"Loaded {len(devs)} input devices.")
 
-        except:
+        except Exception as e:
+            self.debug(f"Device Error: {e}")
             self.query_one("#dev_select", Select).set_options([("Error loading devices", "error")])
 
     def launch_engine(self):
@@ -682,6 +711,7 @@ class PyVizController(App):
                  # We wrap the command in outer quotes with spaces to ensure cmd processing preserves the inner quotes.
                  cmd_str = f'start "PyViz Engine" cmd /k " "{py_exe}" "{cmd_path}" --engine "'
                  logger.info(f"Launching on Windows with command: {cmd_str}")
+                 self.debug("Launching on Windows...")
                  # For Windows 'start', we can't track the PID easily because 'start' exits immediately.
                  # So we rely on manual closing.
                  subprocess.Popen(cmd_str, shell=True)
@@ -701,16 +731,19 @@ class PyVizController(App):
 
                  if term_cmd:
                      logger.info(f"Launching on Linux/Mac with terminal command: {term_cmd}")
+                     self.debug(f"Launching in terminal: {t}")
                      # If we launch a terminal, that terminal is the child.
                      self.engine_process = subprocess.Popen(term_cmd)
                  else:
                      self.notify("No terminal found. Running in background.", severity="warning")
                      bg_cmd = [py_exe, cmd_path, '--engine']
                      logger.info(f"Launching in background (no terminal found): {bg_cmd}")
+                     self.debug("Launching in background (headless)...")
                      self.engine_process = subprocess.Popen(bg_cmd)
         except Exception as e:
             logger.error(f"Failed to launch engine: {e}", exc_info=True)
             self.notify(f"Launch Error: {str(e)}", severity="error")
+            self.debug(f"Launch Failed: {e}")
 
 if __name__ == "__main__":
     import shutil
