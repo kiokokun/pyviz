@@ -72,7 +72,64 @@ FileOpenScreen {
     border: thick $accent;
     background: $surface;
 }
+
+/* UI Themes */
+.theme-retro Screen {
+    background: black;
+    color: #ffb000;
+}
+.theme-retro .box {
+    border: double #ffb000;
+}
+.theme-retro Button {
+    color: black;
+    background: #ffb000;
+    border: none;
+}
+
+.theme-cyber Screen {
+    background: #0d0221;
+    color: #00ff41;
+}
+.theme-cyber .box {
+    border: heavy #00f3ff;
+}
+.theme-cyber Button {
+    background: #ff00ff;
+    color: white;
+}
+
+.theme-gothic Screen {
+    background: #1a0505;
+    color: #8a0303;
+}
+.theme-gothic .box {
+    border: ascii red;
+}
+.theme-gothic Button {
+    background: #2b0000;
+    color: #ff0000;
+}
 """
+
+UI_THEMES = {
+    "Default": {
+        "class": "",
+        "title": "PyViz Controller"
+    },
+    "Retro": {
+        "class": "theme-retro",
+        "title": ">>> P Y V I Z <<<"
+    },
+    "Cyber": {
+        "class": "theme-cyber",
+        "title": "PYVIZ_NET_TERMINAL_V2"
+    },
+    "Gothic": {
+        "class": "theme-gothic",
+        "title": "The Visualizer"
+    }
+}
 
 class FileOpenScreen(ModalScreen[str]):
     """Modal screen for selecting a file."""
@@ -124,6 +181,10 @@ class PyVizController(App):
 
                     yield Label("Theme")
                     yield Select([(k, k) for k in THEMES.keys()], id="theme_select")
+
+                    yield Label("UI Theme (Controller)")
+                    ui_opts = [(k, k) for k in UI_THEMES.keys()]
+                    yield Select(ui_opts, id="ui_theme_select", value="Default")
 
             with TabPane("Visuals", id="tab_visuals"):
                 with ScrollableContainer():
@@ -292,6 +353,12 @@ class PyVizController(App):
         theme_sel = self.query_one("#theme_select", Select)
         theme_sel.value = self.state.get('theme_name', 'Vaporeon')
 
+        # Restore UI Theme (if we saved it, or just default)
+        ui_theme = self.state.get('ui_theme', 'Default')
+        if ui_theme in UI_THEMES:
+            self.query_one("#ui_theme_select", Select).value = ui_theme
+            self.set_ui_theme(ui_theme)
+
         # Visuals
         style_val = str(self.state.get('style', 2))
         self.query_one("#style_select", Select).value = style_val
@@ -344,6 +411,18 @@ class PyVizController(App):
                 json.dump(self.state, f)
             os.replace(tmp_file, CONFIG_FILE)
         except Exception: pass
+
+    def set_ui_theme(self, theme_name: str):
+        if theme_name in UI_THEMES:
+            t_data = UI_THEMES[theme_name]
+            self.title = t_data["title"]
+            # Reset classes then apply new one
+            for t in UI_THEMES.values():
+                if t["class"]:
+                    self.remove_class(t["class"])
+
+            if t_data["class"]:
+                self.add_class(t_data["class"])
 
     # --- Event Handlers ---
 
@@ -439,6 +518,9 @@ class PyVizController(App):
             self.state['img_style'] = int(val)
         elif sid == "img_preset_select":
             self.state['img_char_set'] = str(val)
+        elif sid == "ui_theme_select":
+            self.state['ui_theme'] = str(val)
+            self.set_ui_theme(str(val))
 
         self.save_state()
 
