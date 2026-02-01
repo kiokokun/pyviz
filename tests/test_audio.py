@@ -22,12 +22,16 @@ class TestAudioEngine(unittest.TestCase):
         pump.sd = MagicMock()
         pump.sd.query_devices.return_value = {'name': 'Test Device', 'max_input_channels': 2}
 
+        # Mock default device
+        pump.sd.default.device = [99, 88] # [Input, Output]
+
         # This will now pass verification
         pump.set_device("[1] Test Device")
         self.assertEqual(pump.device_index, 1)
 
+        # Test Default behavior
         pump.set_device("Default")
-        self.assertIsNone(pump.device_index)
+        self.assertEqual(pump.device_index, 99)
 
 if __name__ == '__main__':
     unittest.main()

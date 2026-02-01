@@ -53,7 +53,8 @@ def run_engine():
             self.state = DEFAULT_STATE.copy()
             self.last_load_time = 0
             self.last_check = 0
-            self.last_dev_name = ""
+            # Set to None to ensure we trigger an update on first frame
+            self.last_dev_name = None
 
         def get_state(self):
             # Performance: Only check file system every 1.0 seconds

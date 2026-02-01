@@ -63,9 +63,27 @@ class AudioPump(threading.Thread):
     def _resolve_device_index(self):
         """Attempts to find the device index from self.target_device_name"""
         dev_name = self.target_device_name
-        if not dev_name or not self.sd:
+
+        if not self.sd:
             self.device_index = None
             return
+
+        # Handle Default / Empty
+        if not dev_name or dev_name == "Default":
+            try:
+                # Use system default input device
+                def_idx = self.sd.default.device[0]
+                self.device_index = def_idx
+                logger.info(f"Using system default input device index: {def_idx}")
+                return
+            except Exception as e:
+                logger.warning(f"Could not get system default device: {e}")
+                # Fallback to searching for first input
+                pass
+
+        if not dev_name:
+             self.device_index = None
+             return
 
         # Parse ID if present "[81] Name"
         if dev_name.startswith("["):
