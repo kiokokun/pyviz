@@ -102,8 +102,8 @@ def run_engine():
 # ==========================================
 # /// CONTROLLER ///
 # ==========================================
-def run_controller():
-    # Check dependencies before importing TUI
+def check_system():
+    # 1. Check Python Libraries
     missing = []
     try: import textual
     except ImportError: missing.append("textual")
@@ -118,9 +118,29 @@ def run_controller():
     except ImportError: missing.append("Pillow")
 
     if missing:
-        print(f"ERROR: Missing libraries: {', '.join(missing)}")
+        print(f"CRITICAL: Missing Python libraries: {', '.join(missing)}")
         print("Please run 'pip install -r requirements.txt'")
         sys.exit(1)
+
+    # 2. Check Optional System Tools
+    warnings = []
+    if not shutil.which("ffmpeg"):
+        warnings.append("ffmpeg not found (Video recording will be disabled)")
+
+    if not shutil.which("git"):
+        warnings.append("git not found (Version checking disabled)")
+
+    return warnings
+
+def run_controller():
+    # Run System Checks
+    warnings = check_system()
+    if warnings:
+        print("SYSTEM WARNINGS:")
+        for w in warnings:
+            print(f"  - {w}")
+        print("Launching controller in 2 seconds...")
+        time.sleep(2)
 
     from tui import PyVizController
     app = PyVizController()

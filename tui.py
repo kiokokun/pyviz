@@ -62,6 +62,13 @@ Switch {
 .input-error {
     border: solid red;
 }
+.debug-panel {
+    height: 3;
+    background: $surface;
+    border: solid yellow;
+    margin: 1;
+    overflow-y: scroll;
+}
 /* File Picker */
 FileOpenScreen {
     align: center middle;
@@ -152,6 +159,70 @@ class FileOpenScreen(ModalScreen[str]):
         if event.button.id == "cancel_btn":
             self.dismiss(None)
 
+class SavePresetScreen(ModalScreen[str]):
+    """Modal to enter preset name."""
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="box"):
+            yield Label("Save Preset As:")
+            yield Input(placeholder="my_preset", id="preset_name")
+            with Horizontal():
+                yield Button("Save", id="save_btn", variant="success")
+                yield Button("Cancel", id="cancel_btn", variant="error")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel_btn":
+            self.dismiss(None)
+        elif event.button.id == "save_btn":
+            val = self.query_one("#preset_name", Input).value
+            if val: self.dismiss(val)
+
+class HelpScreen(ModalScreen):
+    """Help Modal."""
+    def compose(self) -> ComposeResult:
+        help_text = """
+        [bold underline]PyViz Help[/]
+
+        [bold]Controls:[/bold]
+        - [green]Sensitivity[/]: Multiplier for microphone volume. Increase if bars are too small.
+        - [green]Gravity[/]: How fast bars fall down.
+        - [green]Smoothing[/]: Blends frames for smoother motion. High = slow/smooth.
+        - [green]Bass Threshold[/]: Audio level required to trigger beat effects (glitch/pulse).
+        - [green]Noise Floor[/]: Minimum volume (dB) to register as sound. Decrease if quiet sounds are ignored.
+
+        [bold]Modes:[/bold]
+        - [yellow]Mirror[/]: Duplicates the left half of the screen to the right.
+        - [yellow]Glitch[/]: Random visual artifacts triggered by bass beats.
+
+        [bold]Presets:[/bold]
+        - Save your current setup to the 'presets/' folder to load later.
+        """
+        with Vertical(classes="box"):
+            yield Static(help_text)
+            yield Button("Close", id="close_help", variant="primary")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss()
+
+class LoadPresetScreen(ModalScreen[str]):
+    """Modal to select a preset."""
+    def compose(self) -> ComposeResult:
+        presets_dir = os.path.join(os.getcwd(), "presets")
+        if not os.path.exists(presets_dir):
+            os.makedirs(presets_dir)
+
+        with Vertical(classes="box"):
+            yield Label("Select Preset")
+            yield DirectoryTree(presets_dir, id="preset_tree")
+            with Horizontal():
+                yield Button("Cancel", id="cancel_btn", variant="error")
+
+    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+        self.dismiss(str(event.path))
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel_btn":
+            self.dismiss(None)
+
 class PyVizController(App):
     """
     Main TUI Controller for PyViz.
@@ -165,12 +236,20 @@ class PyVizController(App):
     def compose(self) -> ComposeResult:
         yield Header()
 
-        with TabbedContent():
-            with TabPane("Main", id="tab_main"):
+        with Vertical(id="main_content"):
+            with TabbedContent():
+                # TAB 1: Main (Audio, Sens, Theme)
+                with TabPane("Main", id="tab_main"):
                 with Vertical(classes="box"):
                     yield Label("Audio Source")
                     yield Select([], id="dev_select", prompt="Select Input Device", tooltip="Select the audio input device (requires restart if engine running)")
                     yield Button("Refresh Devices", id="refresh_dev", variant="primary", tooltip="Reload list of audio devices")
+
+                with Vertical(classes="box"):
+                    yield Label("Preset Manager")
+                    with Horizontal():
+                        yield Button("Load Preset", id="load_preset_btn", variant="primary")
+                        yield Button("Save Preset", id="save_preset_btn", variant="success")
 
                 with Vertical(classes="box"):
                     yield Label("Sensitivity")
@@ -186,7 +265,10 @@ class PyVizController(App):
                     ui_opts = [(k, k) for k in UI_THEMES.keys()]
                     yield Select(ui_opts, id="ui_theme_select", value="Default", tooltip="Theme for this settings window")
 
-            with TabPane("Visuals", id="tab_visuals"):
+                yield Button("RESET TO DEFAULTS", id="reset_btn", variant="error", tooltip="Reset all settings to factory defaults")
+
+            # TAB 2: Bars (Styles, Mirror, Physics for bars)
+            with TabPane("Bars", id="tab_bars"):
                 with ScrollableContainer():
                     with Vertical(classes="box"):
                         yield Label("Visual Style")
@@ -200,63 +282,32 @@ class PyVizController(App):
                         yield Input(value="  ▂▃▄▅▆▇█", id="bar_chars_input", tooltip="Custom characters for bars (from low to high volume)")
 
                         with Horizontal(classes="control-row"):
-                            yield Label("Show Stars", classes="control-label")
-                            yield Switch(value=True, id="stars_switch", tooltip="Enable background starfield effect")
+                            yield Label("Mirror Mode", classes="control-label")
+                            yield Switch(value=False, id="mirror_switch", tooltip="Mirror the visualization horizontally")
 
                         with Horizontal(classes="control-row"):
                             yield Label("Show Peaks", classes="control-label")
                             yield Switch(value=True, id="peaks_switch", tooltip="Show falling peak indicators")
 
-                        with Horizontal(classes="control-row"):
-                            yield Label("Mirror Mode", classes="control-label")
-                            yield Switch(value=False, id="mirror_switch", tooltip="Mirror the visualization horizontally")
-
                     with Vertical(classes="box"):
-                        yield Label("Physics Settings")
-
-                        yield Label("Gravity")
-                        with Horizontal(classes="adjust-row"):
-                            yield Button("-", id="grav_down", classes="adjust-btn")
-                            yield Input(value="0.25", id="grav_input", classes="adjust-input")
-                            yield Button("+", id="grav_up", classes="adjust-btn")
-
-                        yield Label("Smoothing")
-                        with Horizontal(classes="adjust-row"):
-                            yield Button("-", id="smooth_down", classes="adjust-btn")
-                            yield Input(value="0.15", id="smooth_input", classes="adjust-input")
-                            yield Button("+", id="smooth_up", classes="adjust-btn")
-
-                        yield Label("Noise Floor (dB)")
-                        yield Input(value="-60.0", id="noise_input", classes="adjust-input")
-
-                        yield Label("Auto Gain")
-                        yield Switch(value=True, id="gain_switch")
-
-            with TabPane("Advanced", id="tab_adv"):
-                with ScrollableContainer():
-                    with Vertical(classes="box"):
-                        yield Label("Advanced Audio")
+                        yield Label("Bar Physics")
                         yield Label("Rise Speed")
                         yield Input(value="0.6", id="rise_input", classes="adjust-input", tooltip="How fast bars react to sound (0.0-1.0)")
 
                         yield Label("Bass Threshold")
                         yield Input(value="0.7", id="bass_input", classes="adjust-input", tooltip="Frequency cutoff for bass detection")
 
-                    with Vertical(classes="box"):
-                        yield Label("Advanced Visuals")
                         yield Label("Peak Gravity")
                         yield Input(value="0.15", id="peak_grav_input", classes="adjust-input", tooltip="How fast peak indicators fall")
 
-                        yield Label("Glitch Intensity")
-                        yield Input(value="0.0", id="glitch_input", classes="adjust-input", tooltip="Random visual glitch effect intensity")
-
-                        yield Label("Target FPS")
-                        yield Input(value="30", id="fps_input", classes="adjust-input", tooltip="Target Frames Per Second (default 30)")
-
-                    yield Button("RESET TO DEFAULTS", id="reset_btn", variant="error", tooltip="Reset all settings to factory defaults")
-
-            with TabPane("Images", id="tab_images"):
+            # TAB 3: Background (Images, Stars)
+            with TabPane("Background", id="tab_bg"):
                 with ScrollableContainer():
+                    with Vertical(classes="box"):
+                        with Horizontal(classes="control-row"):
+                            yield Label("Show Stars", classes="control-label")
+                            yield Switch(value=True, id="stars_switch", tooltip="Enable background starfield effect")
+
                     with Vertical(classes="box"):
                         yield Label("Background Image")
                         with Horizontal():
@@ -296,6 +347,39 @@ class PyVizController(App):
                             yield Label("Flip", classes="control-label")
                             yield Switch(value=False, id="fg_img_flip")
 
+            # TAB 4: Effects (Global Physics, Glitch, FPS)
+            with TabPane("Effects", id="tab_effects"):
+                with ScrollableContainer():
+                    with Vertical(classes="box"):
+                        yield Label("Global Physics")
+
+                        yield Label("Gravity")
+                        with Horizontal(classes="adjust-row"):
+                            yield Button("-", id="grav_down", classes="adjust-btn")
+                            yield Input(value="0.25", id="grav_input", classes="adjust-input")
+                            yield Button("+", id="grav_up", classes="adjust-btn")
+
+                        yield Label("Smoothing")
+                        with Horizontal(classes="adjust-row"):
+                            yield Button("-", id="smooth_down", classes="adjust-btn")
+                            yield Input(value="0.15", id="smooth_input", classes="adjust-input")
+                            yield Button("+", id="smooth_up", classes="adjust-btn")
+
+                        yield Label("Noise Floor (dB)")
+                        yield Input(value="-60.0", id="noise_input", classes="adjust-input")
+
+                        yield Label("Auto Gain")
+                        yield Switch(value=True, id="gain_switch")
+
+                    with Vertical(classes="box"):
+                        yield Label("Post Processing")
+
+                        yield Label("Glitch Intensity")
+                        yield Input(value="0.0", id="glitch_input", classes="adjust-input", tooltip="Random visual glitch effect intensity")
+
+                        yield Label("Target FPS")
+                        yield Input(value="30", id="fps_input", classes="adjust-input", tooltip="Target Frames Per Second (default 30)")
+
             with TabPane("Text & AFK", id="tab_text"):
                 with ScrollableContainer():
                     with Vertical(classes="box"):
@@ -334,7 +418,13 @@ class PyVizController(App):
                         yield Label("AFK Timeout (sec)")
                         yield Input(value="30", id="afk_timeout_input")
 
-        yield Button(">>> LAUNCH ENGINE <<<", id="launch_btn", variant="success")
+        # Bottom Panel (Always Visible)
+        with Vertical(classes="bottom-panel"):
+            yield Static("Ready.", id="debug_log", classes="debug-panel")
+            with Horizontal():
+                yield Button("Help", id="help_btn", variant="primary", classes="adjust-btn")
+                yield Button(">>> LAUNCH ENGINE <<<", id="launch_btn", variant="success")
+
         yield Footer()
 
     def on_unmount(self) -> None:
@@ -347,6 +437,17 @@ class PyVizController(App):
     def on_mount(self) -> None:
         self.load_state_from_file()
         self.refresh_devices()
+
+    def debug(self, msg: str):
+        try:
+            log_widget = self.query_one("#debug_log", Static)
+            current = str(log_widget.renderable)
+            # Keep last 3 lines
+            lines = current.split('\n')
+            if len(lines) > 2: lines = lines[-2:]
+            lines.append(f"> {msg}")
+            log_widget.update("\n".join(lines))
+        except: pass
 
     def load_state_from_file(self):
         if not os.path.exists(CONFIG_FILE):
@@ -426,7 +527,9 @@ class PyVizController(App):
             with open(tmp_file, 'w') as f:
                 json.dump(self.state, f)
             os.replace(tmp_file, CONFIG_FILE)
-        except Exception: pass
+            self.debug("Config saved.")
+        except Exception as e:
+            self.debug(f"Save Error: {e}")
 
     def set_ui_theme(self, theme_name: str):
         # Safe fallback
@@ -450,6 +553,7 @@ class PyVizController(App):
         bid = event.button.id
         if bid == "refresh_dev":
             self.refresh_devices()
+            self.debug("Refreshed audio devices.")
         elif bid == "launch_btn":
             self.launch_engine()
         elif bid == "bg_browse_btn":
@@ -485,6 +589,13 @@ class PyVizController(App):
             self.sync_ui_to_state()
             self.save_state()
             self.notify("Reset to defaults!", severity="information")
+            self.debug("Reset to defaults.")
+        elif bid == "save_preset_btn":
+            self.push_screen(SavePresetScreen(), self.save_preset)
+        elif bid == "load_preset_btn":
+            self.push_screen(LoadPresetScreen(), self.load_preset)
+        elif bid == "help_btn":
+            self.push_screen(HelpScreen())
         elif bid == "img_thresh_up":
             self.state['img_thresh'] = round(min(0.95, self.state.get('img_thresh', 0.05) + 0.05), 2)
             self.query_one("#img_thresh_input", Input).value = str(self.state['img_thresh'])
@@ -493,6 +604,34 @@ class PyVizController(App):
             self.state['img_thresh'] = round(max(0.0, self.state.get('img_thresh', 0.05) - 0.05), 2)
             self.query_one("#img_thresh_input", Input).value = str(self.state['img_thresh'])
             self.save_state()
+
+    def save_preset(self, name: str | None):
+        if not name: return
+        try:
+            if not name.endswith(".json"): name += ".json"
+            path = os.path.join("presets", name)
+            with open(path, 'w') as f:
+                json.dump(self.state, f)
+            self.debug(f"Saved preset: {name}")
+            self.notify(f"Saved {name}")
+        except Exception as e:
+            self.debug(f"Preset Save Error: {e}")
+
+    def load_preset(self, path: str | None):
+        if not path: return
+        try:
+            with open(path, 'r') as f:
+                new_state = json.load(f)
+            # Merge logic? Or replace? Replace is safer.
+            # But we want to preserve device? Maybe.
+            # For now, full replace except maybe dev_name if missing
+            self.state.update(new_state)
+            self.sync_ui_to_state()
+            self.save_state() # Persist as current config
+            self.debug(f"Loaded preset: {os.path.basename(path)}")
+            self.notify("Preset Loaded!")
+        except Exception as e:
+            self.debug(f"Preset Load Error: {e}")
 
     def open_file_picker(self, target: str):
         def set_file(path: str | None):
@@ -654,8 +793,10 @@ class PyVizController(App):
             current = self.state.get('dev_name', '')
             if any(d[0] == current for d in devs):
                 select.value = current
+            self.debug(f"Loaded {len(devs)} input devices.")
 
-        except:
+        except Exception as e:
+            self.debug(f"Device Error: {e}")
             self.query_one("#dev_select", Select).set_options([("Error loading devices", "error")])
 
     def launch_engine(self):
@@ -676,6 +817,7 @@ class PyVizController(App):
                  # We wrap the command in outer quotes with spaces to ensure cmd processing preserves the inner quotes.
                  cmd_str = f'start "PyViz Engine" cmd /k " "{py_exe}" "{cmd_path}" --engine "'
                  logger.info(f"Launching on Windows with command: {cmd_str}")
+                 self.debug("Launching on Windows...")
                  # For Windows 'start', we can't track the PID easily because 'start' exits immediately.
                  # So we rely on manual closing.
                  subprocess.Popen(cmd_str, shell=True)
@@ -695,16 +837,19 @@ class PyVizController(App):
 
                  if term_cmd:
                      logger.info(f"Launching on Linux/Mac with terminal command: {term_cmd}")
+                     self.debug(f"Launching in terminal: {t}")
                      # If we launch a terminal, that terminal is the child.
                      self.engine_process = subprocess.Popen(term_cmd)
                  else:
                      self.notify("No terminal found. Running in background.", severity="warning")
                      bg_cmd = [py_exe, cmd_path, '--engine']
                      logger.info(f"Launching in background (no terminal found): {bg_cmd}")
+                     self.debug("Launching in background (headless)...")
                      self.engine_process = subprocess.Popen(bg_cmd)
         except Exception as e:
             logger.error(f"Failed to launch engine: {e}", exc_info=True)
             self.notify(f"Launch Error: {str(e)}", severity="error")
+            self.debug(f"Launch Failed: {e}")
 
 if __name__ == "__main__":
     import shutil
