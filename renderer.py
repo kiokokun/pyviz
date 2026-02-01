@@ -6,6 +6,10 @@ from config import THEMES, FONT_MAP, CHAR_SETS
 from effects.glitch import GlitchEffect
 from effects.matrix import MatrixEffect
 from effects.pong import PongEffect
+from effects.waterfall import WaterfallEffect
+from effects.scope import OscilloscopeEffect
+from effects.lissajous import LissajousEffect
+from effects.life import GameOfLifeEffect
 from rich.live import Live
 from rich.layout import Layout
 from rich.text import Text
@@ -141,7 +145,10 @@ class Renderer:
         self.peak_heights: Any = np.zeros(100) if np else []
         self.stars_list: List[Star] = [Star() for _ in range(100)]
 
-        self.effects: List[Any] = [GlitchEffect(), MatrixEffect(), PongEffect()]
+        self.effects: List[Any] = [
+            GlitchEffect(), MatrixEffect(), PongEffect(),
+            WaterfallEffect(), OscilloscopeEffect(), LissajousEffect(), GameOfLifeEffect()
+        ]
 
         self.buf_bg: Any = [] # List or List[List]
         self.buf_fg: Any = []

@@ -31,10 +31,16 @@ class AudioPump(threading.Thread):
             self.raw_fft: Any = np.zeros(1024)
             self.raw_fft_left: Any = np.zeros(1024)
             self.raw_fft_right: Any = np.zeros(1024)
+            self.raw_pcm: Any = np.zeros(2048) # Mono
+            self.raw_pcm_left: Any = np.zeros(2048)
+            self.raw_pcm_right: Any = np.zeros(2048)
         else:
             self.raw_fft = []
             self.raw_fft_left = []
             self.raw_fft_right = []
+            self.raw_pcm = []
+            self.raw_pcm_left = []
+            self.raw_pcm_right = []
 
         self.volume: float = 0.0
         self.status: str = "IDLE"
@@ -209,6 +215,11 @@ class AudioPump(threading.Thread):
                                         mono = data
                                     left = mono
                                     right = mono
+
+                                # Store Raw PCM
+                                self.raw_pcm = mono
+                                self.raw_pcm_left = left
+                                self.raw_pcm_right = right
 
                                 self.volume = float(self.np.linalg.norm(mono) * 10) # Rough volume
 

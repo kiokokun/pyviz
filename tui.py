@@ -396,6 +396,22 @@ class PyVizController(App):
                             yield Label("Pong Mode", classes="control-label")
                             yield Switch(value=False, id="pong_switch")
 
+                        with Horizontal(classes="control-row"):
+                            yield Label("Waterfall", classes="control-label")
+                            yield Switch(value=False, id="waterfall_switch")
+
+                        with Horizontal(classes="control-row"):
+                            yield Label("Oscilloscope", classes="control-label")
+                            yield Switch(value=False, id="scope_switch")
+
+                        with Horizontal(classes="control-row"):
+                            yield Label("Lissajous", classes="control-label")
+                            yield Switch(value=False, id="lissajous_switch")
+
+                        with Horizontal(classes="control-row"):
+                            yield Label("Game of Life", classes="control-label")
+                            yield Switch(value=False, id="life_switch")
+
                         yield Label("Target FPS")
                         yield Input(value="30", id="fps_input", classes="adjust-input", tooltip="Target Frames Per Second (default 30)")
 
@@ -553,6 +569,10 @@ class PyVizController(App):
         self.query_one("#glitch_input", Input).value = str(self.state.get('glitch', 0.0))
         self.query_one("#matrix_switch", Switch).value = self.state.get('matrix_rain', False)
         self.query_one("#pong_switch", Switch).value = self.state.get('pong_mode', False)
+        self.query_one("#waterfall_switch", Switch).value = self.state.get('waterfall_mode', False)
+        self.query_one("#scope_switch", Switch).value = self.state.get('scope_mode', False)
+        self.query_one("#lissajous_switch", Switch).value = self.state.get('lissajous_mode', False)
+        self.query_one("#life_switch", Switch).value = self.state.get('life_mode', False)
         self.query_one("#fps_input", Input).value = str(self.state.get('fps', 30))
 
         # Images
@@ -834,6 +854,10 @@ class PyVizController(App):
         elif sid == "gain_switch": self.state['auto_gain'] = val
         elif sid == "matrix_switch": self.state['matrix_rain'] = val
         elif sid == "pong_switch": self.state['pong_mode'] = val
+        elif sid == "waterfall_switch": self.state['waterfall_mode'] = val
+        elif sid == "scope_switch": self.state['scope_mode'] = val
+        elif sid == "lissajous_switch": self.state['lissajous_mode'] = val
+        elif sid == "life_switch": self.state['life_mode'] = val
         elif sid == "bg_img_switch": self.state['img_bg_on'] = val
         elif sid == "bg_img_flip": self.state['img_bg_flip'] = val
         elif sid == "fg_img_switch": self.state['img_fg_on'] = val
