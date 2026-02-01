@@ -169,47 +169,47 @@ class PyVizController(App):
             with TabPane("Main", id="tab_main"):
                 with Vertical(classes="box"):
                     yield Label("Audio Source")
-                    yield Select([], id="dev_select", prompt="Select Input Device")
-                    yield Button("Refresh Devices", id="refresh_dev", variant="primary")
+                    yield Select([], id="dev_select", prompt="Select Input Device", tooltip="Select the audio input device (requires restart if engine running)")
+                    yield Button("Refresh Devices", id="refresh_dev", variant="primary", tooltip="Reload list of audio devices")
 
                 with Vertical(classes="box"):
                     yield Label("Sensitivity")
                     with Horizontal(classes="adjust-row"):
                         yield Button("-", id="sens_down", classes="adjust-btn")
-                        yield Input(value="1.0", id="sens_input", classes="adjust-input")
+                        yield Input(value="1.0", id="sens_input", classes="adjust-input", tooltip="Microphone sensitivity multiplier")
                         yield Button("+", id="sens_up", classes="adjust-btn")
 
                     yield Label("Theme")
-                    yield Select([(k, k) for k in THEMES.keys()], id="theme_select")
+                    yield Select([(k, k) for k in THEMES.keys()], id="theme_select", tooltip="Color palette for the visualizer")
 
                     yield Label("UI Theme (Controller)")
                     ui_opts = [(k, k) for k in UI_THEMES.keys()]
-                    yield Select(ui_opts, id="ui_theme_select", value="Default")
+                    yield Select(ui_opts, id="ui_theme_select", value="Default", tooltip="Theme for this settings window")
 
             with TabPane("Visuals", id="tab_visuals"):
                 with ScrollableContainer():
                     with Vertical(classes="box"):
                         yield Label("Visual Style")
-                        yield Select([("Char", "2"), ("Block", "1"), ("Line", "0")], id="style_select")
+                        yield Select([("Char", "2"), ("Block", "1"), ("Line", "0")], id="style_select", tooltip="Rendering style (Characters, Solid Blocks, or Line)")
 
                         yield Label("Character Preset")
                         char_opts = [(k, v) for k, v in CHAR_SETS.items()]
-                        yield Select(char_opts, id="char_preset_select", prompt="Select Preset")
+                        yield Select(char_opts, id="char_preset_select", prompt="Select Preset", tooltip="Select a predefined character set (Overwrites Bar Characters)")
 
                         yield Label("Bar Characters")
-                        yield Input(value="  ▂▃▄▅▆▇█", id="bar_chars_input")
+                        yield Input(value="  ▂▃▄▅▆▇█", id="bar_chars_input", tooltip="Custom characters for bars (from low to high volume)")
 
                         with Horizontal(classes="control-row"):
                             yield Label("Show Stars", classes="control-label")
-                            yield Switch(value=True, id="stars_switch")
+                            yield Switch(value=True, id="stars_switch", tooltip="Enable background starfield effect")
 
                         with Horizontal(classes="control-row"):
                             yield Label("Show Peaks", classes="control-label")
-                            yield Switch(value=True, id="peaks_switch")
+                            yield Switch(value=True, id="peaks_switch", tooltip="Show falling peak indicators")
 
                         with Horizontal(classes="control-row"):
                             yield Label("Mirror Mode", classes="control-label")
-                            yield Switch(value=False, id="mirror_switch")
+                            yield Switch(value=False, id="mirror_switch", tooltip="Mirror the visualization horizontally")
 
                     with Vertical(classes="box"):
                         yield Label("Physics Settings")
@@ -237,18 +237,23 @@ class PyVizController(App):
                     with Vertical(classes="box"):
                         yield Label("Advanced Audio")
                         yield Label("Rise Speed")
-                        yield Input(value="0.6", id="rise_input", classes="adjust-input")
+                        yield Input(value="0.6", id="rise_input", classes="adjust-input", tooltip="How fast bars react to sound (0.0-1.0)")
 
                         yield Label("Bass Threshold")
-                        yield Input(value="0.7", id="bass_input", classes="adjust-input")
+                        yield Input(value="0.7", id="bass_input", classes="adjust-input", tooltip="Frequency cutoff for bass detection")
 
                     with Vertical(classes="box"):
                         yield Label("Advanced Visuals")
                         yield Label("Peak Gravity")
-                        yield Input(value="0.15", id="peak_grav_input", classes="adjust-input")
+                        yield Input(value="0.15", id="peak_grav_input", classes="adjust-input", tooltip="How fast peak indicators fall")
 
                         yield Label("Glitch Intensity")
-                        yield Input(value="0.0", id="glitch_input", classes="adjust-input")
+                        yield Input(value="0.0", id="glitch_input", classes="adjust-input", tooltip="Random visual glitch effect intensity")
+
+                        yield Label("Target FPS")
+                        yield Input(value="30", id="fps_input", classes="adjust-input", tooltip="Target Frames Per Second (default 30)")
+
+                    yield Button("RESET TO DEFAULTS", id="reset_btn", variant="error", tooltip="Reset all settings to factory defaults")
 
             with TabPane("Images", id="tab_images"):
                 with ScrollableContainer():
@@ -334,10 +339,10 @@ class PyVizController(App):
             except: pass
 
     def on_mount(self) -> None:
-        self.load_state()
+        self.load_state_from_file()
         self.refresh_devices()
 
-    def load_state(self):
+    def load_state_from_file(self):
         if not os.path.exists(CONFIG_FILE):
             with open(CONFIG_FILE, 'w') as f: json.dump(DEFAULT_STATE, f)
 
@@ -347,6 +352,9 @@ class PyVizController(App):
         except Exception:
             self.state = DEFAULT_STATE.copy()
 
+        self.sync_ui_to_state()
+
+    def sync_ui_to_state(self):
         # Update UI Elements
         # Main
         self.query_one("#sens_input", Input).value = str(self.state.get('sens', 1.0))
@@ -377,6 +385,7 @@ class PyVizController(App):
         self.query_one("#bass_input", Input).value = str(self.state.get('bass_thresh', 0.7))
         self.query_one("#peak_grav_input", Input).value = str(self.state.get('peak_gravity', 0.15))
         self.query_one("#glitch_input", Input).value = str(self.state.get('glitch', 0.0))
+        self.query_one("#fps_input", Input).value = str(self.state.get('fps', 30))
 
         # Images
         self.query_one("#bg_img_path", Input).value = self.state.get('img_bg_path', '')
@@ -464,6 +473,11 @@ class PyVizController(App):
             self.state['smoothing'] = round(max(0.05, self.state.get('smoothing', 0.15) - 0.05), 2)
             self.query_one("#smooth_input", Input).value = str(self.state['smoothing'])
             self.save_state()
+        elif bid == "reset_btn":
+            self.state = DEFAULT_STATE.copy()
+            self.sync_ui_to_state()
+            self.save_state()
+            self.notify("Reset to defaults!", severity="information")
 
     def open_file_picker(self, target: str):
         def set_file(path: str | None):
@@ -532,18 +546,23 @@ class PyVizController(App):
         iid = event.input.id
         val = event.value
 
+        # Sanitization & Type Conversion
         if iid == "text_input":
+            if len(val) > 100: val = val[:100] # Cap length
             self.state['text_str'] = val
         elif iid == "bar_chars_input":
+            val = val.replace('\n', '').replace('\r', '')
+            if len(val) > 50: val = val[:50]
             self.state['bar_chars'] = val
         elif iid == "afk_text_input":
+            if len(val) > 50: val = val[:50]
             self.state['afk_text'] = val
         elif iid == "bg_img_path":
             self.state['img_bg_path'] = val
         elif iid == "fg_img_path":
             self.state['img_fg_path'] = val
         elif iid == "afk_timeout_input":
-            try: self.state['afk_timeout'] = int(val)
+            try: self.state['afk_timeout'] = max(1, int(val))
             except: pass
         # Numeric inputs
         elif iid == "sens_input":
@@ -575,6 +594,9 @@ class PyVizController(App):
             except: pass
         elif iid == "text_pos_input":
             try: self.state['text_pos_y'] = float(val)
+            except: pass
+        elif iid == "fps_input":
+            try: self.state['fps'] = int(val)
             except: pass
 
         self.save_state()
