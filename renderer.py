@@ -415,14 +415,18 @@ class Renderer:
                 line_y = sy + i
                 if not (0 <= line_y < h): continue
 
-                # If scrolling, start_x is global offset. If centering, it's calculated per line?
-                # Usually banner lines are padded or same width.
-                # Let's assume left-aligned banner block if scrolling.
-
                 row_start = start_x if state.get('text_scroll', False) else (w - len(l)) // 2
 
                 for j, c in enumerate(l):
                     dx = row_start + j
+
+                    # Text Glitch Logic
+                    if state.get('text_glitch', False):
+                        if random.random() < 0.05: # 5% chance per char
+                            dx += random.choice([-1, 1]) # Jitter X
+                        if random.random() < 0.02: # 2% chance scramble
+                            c = random.choice("!@#$%^&*?")
+
                     if 0 <= dx < w:
                         if c != " ":
                             cbf[line_y][dx] = (WHITE, BLACK)

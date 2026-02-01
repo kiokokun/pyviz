@@ -2,14 +2,19 @@
 Here are the planned features and improvements for the Python Visualizer.
 
 ## Features to Add
-- [ ] **Beat Detection**: Implement a more advanced beat detection algorithm to trigger specific visual effects on beat drops.
-- [ ] **More Themes**: Add more color themes and visual styles.
 - [ ] **Web Controller**: Create a web-based controller to adjust settings remotely (e.g., using Flask or FastAPI).
 - [ ] **Networked Audio**: Allow visualizing audio from a remote source.
-- [ ] **Recording**: Add ability to record the visualization to a video file.
-- [ ] **Modular Effects**: Refactor the rendering engine to support pluggable effects modules.
+- [ ] **Audio Recording**: Add ability to record the audio input to a WAV file.
+- [ ] **Visual Recording**: Add ability to record the visualization to a video/GIF file.
+- [ ] **WASAPI Loopback**: Support system audio capture on Windows (visualize what you hear).
+- [ ] **Custom Color Palette Editor**: A TUI screen for creating and saving custom color themes.
+- [ ] **Frequency Range Control**: Allow configuring Min/Max Hz frequencies for the visualization bars.
+- [ ] **Preset Management UI**: Add Save/Load buttons to the TUI to manage configuration presets.
+- [ ] **Screensaver Mode**: Run without window borders or taskbar icon.
+- [ ] **Interactive Mode**: Mouse interaction to spawn particles or effects.
 
 ## Improvements
+- [ ] **Advanced Beat Detection**: Implement FFT-based onset detection for more accurate beat syncing.
 - [ ] **Cross-Platform**: Further improve support for macOS and Linux (e.g., specific terminal handling).
 - [x] **Performance**: Optimize the rendering loop for higher FPS on lower-end hardware (Implemented RLE rendering and resolution scaling).
 - [ ] **Configuration**: Add a GUI for creating and saving custom color themes.
