@@ -29,10 +29,10 @@ WHITE = (255, 255, 255)
 
 # Helpers
 _IMG_CACHE = {}
-def process_image(path: str, w: int, h: int) -> Union[List[List[Tuple[int, int, int]]], List[List[List[Tuple[int, int, int]]]]]:
+def process_image(path: str, w: int, h: int) -> Union[List[List[Tuple[int, int, int, int]]], List[List[List[Tuple[int, int, int, int]]]]]:
     """
     Returns either a single buffer (static image) or a list of buffers (animated GIF).
-    Buffer = List of Rows, Row = List of RGB Tuples (No Chars yet).
+    Buffer = List of Rows, Row = List of RGBA Tuples.
     """
     key = (path, w, h)
     if key in _IMG_CACHE: return _IMG_CACHE[key]
@@ -49,14 +49,15 @@ def process_image(path: str, w: int, h: int) -> Union[List[List[Tuple[int, int, 
         frames = []
         frame_iter = ImageSequence.Iterator(im) if is_animated else [im]
         for frame in frame_iter:
-            f_img = frame.copy().resize((w, h)).convert("RGB")
+            # Force RGBA for alpha channel support
+            f_img = frame.copy().resize((w, h)).convert("RGBA")
             px = f_img.load()
             frame_buf = []
             for y in range(h):
                 row = []
                 for x in range(w):
-                    r,g,b = px[x,y]
-                    row.append((r,g,b))
+                    r,g,b,a = px[x,y]
+                    row.append((r,g,b,a))
                 frame_buf.append(row)
             frames.append(frame_buf)
 
@@ -248,20 +249,27 @@ class Renderer:
             # Prepare Char Set
             img_style = state.get('img_style', 2)
             img_chars = CHAR_SETS.get(state.get('img_char_set', 'Blocks'), CHAR_SETS['Blocks'])
+            thresh = state.get('img_thresh', 0.05)
 
             for y in range(h):
                 for x in range(w):
                     if y < len(cur_bg):
                         row = cur_bg[y]
                         if x < len(row):
-                            rgb = row[x]
+                            r,g,b,a = row[x]
+
+                            # Alpha / Luminance Cutoff
+                            lum = (0.299*r + 0.587*g + 0.114*b) / 255.0
+
+                            if a < 50 or lum < thresh:
+                                continue # Transparency (Skip drawing)
+
+                            rgb = (r, g, b)
 
                             if img_style == 1: # Block (Background color)
                                 cbf[y][x] = col_style(WHITE, rgb)
                                 buf[y][x] = " "
                             else: # Char (Foreground color)
-                                # Calculate Luminance
-                                lum = (0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2]) / 255.0
                                 char_idx = int(lum * (len(img_chars) - 1))
                                 char_idx = max(0, min(char_idx, len(img_chars)-1))
 
@@ -330,7 +338,10 @@ class Renderer:
                          cur_fg = cur_fg[idx]
 
                      if y < len(cur_fg) and x < len(cur_fg[y]):
-                         final_rgb = cur_fg[y][x]
+                         # FG Texture also updated to RGBA
+                         fr, fg, fb, fa = cur_fg[y][x]
+                         if fa > 50:
+                             final_rgb = (fr, fg, fb)
 
                 if style_mode == 1: # Block
                     cbf[y][x] = (WHITE, final_rgb) # BG color
