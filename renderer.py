@@ -229,21 +229,39 @@ class Renderer:
         if state['img_bg_on'] and self.buf_bg:
             # Handle Animation
             cur_bg = self.buf_bg
-            if isinstance(cur_bg, list) and len(cur_bg) > 0 and isinstance(cur_bg[0], list) and isinstance(cur_bg[0][0], list):
+
+            # Heuristic check for 3D array (Animation: [Frames][Rows][Pixels])
+            # Normal buffer: [Rows][Pixels]
+            # Pixel is Tuple. Row is List. Buffer is List.
+            # Animated: List[List[List[Tuple]]]
+            # Static: List[List[Tuple]]
+
+            is_animated = False
+            if len(cur_bg) > 0 and isinstance(cur_bg[0], list):
+                # cur_bg[0] is a Row (Static) or a Frame (Animated)
+                if len(cur_bg[0]) > 0 and isinstance(cur_bg[0][0], list):
+                     # If the item inside the first list is a LIST, it's a ROW inside a FRAME.
+                     is_animated = True
+
+            if is_animated:
                 # It's a list of frames
                 idx = (self.frame_idx // 2) % len(cur_bg) # Slow down GIF slightly
                 cur_bg = cur_bg[idx]
 
             for y in range(h):
                 for x in range(w):
-                    if y < len(cur_bg) and x < len(cur_bg[0]):
-                        res = cur_bg[y][x]
-                        if state['style'] != 0:
-                            cbf[y][x] = col_style(res[1])
-                            buf[y][x] = res[0]
-                        else:
-                            cbf[y][x] = col_style(WHITE, res[1])
-                            buf[y][x] = " "
+                    # Check bounds
+                    if y < len(cur_bg):
+                        row = cur_bg[y]
+                        if x < len(row):
+                            res = row[x]
+                            # res is (char, rgb)
+                            if state['style'] != 0:
+                                cbf[y][x] = col_style(res[1])
+                                buf[y][x] = res[0]
+                            else:
+                                cbf[y][x] = col_style(WHITE, res[1])
+                                buf[y][x] = " "
 
         # Stars
         if state['stars']:
@@ -289,11 +307,17 @@ class Renderer:
                 if state['img_fg_on'] and self.buf_fg:
                      # Handle Animation
                      cur_fg = self.buf_fg
-                     if isinstance(cur_fg, list) and len(cur_fg) > 0 and isinstance(cur_fg[0], list) and isinstance(cur_fg[0][0], list):
+
+                     is_anim_fg = False
+                     if len(cur_fg) > 0 and isinstance(cur_fg[0], list):
+                        if len(cur_fg[0]) > 0 and isinstance(cur_fg[0][0], list):
+                             is_anim_fg = True
+
+                     if is_anim_fg:
                          idx = (self.frame_idx // 2) % len(cur_fg)
                          cur_fg = cur_fg[idx]
 
-                     if y < len(cur_fg) and x < len(cur_fg[0]):
+                     if y < len(cur_fg) and x < len(cur_fg[y]):
                          final_rgb = cur_fg[y][x][1]
 
                 if style_mode == 1: # Block
@@ -354,14 +378,36 @@ class Renderer:
                     except: pass
 
             sy = int(state['text_pos_y'] * (h - len(banner)))
+
+            # Scrolling Logic
+            x_offset = 0
+            if state.get('text_scroll', False):
+                # Scroll speed: 1 char per 2 frames approx
+                scroll_speed = 4
+                total_w = max(len(l) for l in banner) if banner else 0
+                cycle_len = w + total_w
+                if cycle_len > 0:
+                    raw_offset = (self.frame_idx // 2) % cycle_len
+                    # Move from right to left: starts at w, goes to -total_w
+                    x_offset = w - raw_offset
+                # Override centering
+                start_x = x_offset
+            else:
+                # Center text
+                start_x = (w - (len(banner[0]) if banner else 0)) // 2
+
             for i, l in enumerate(banner):
                 line_y = sy + i
                 if not (0 <= line_y < h): continue
 
-                # Center text
-                start_x = (w - len(l)) // 2
+                # If scrolling, start_x is global offset. If centering, it's calculated per line?
+                # Usually banner lines are padded or same width.
+                # Let's assume left-aligned banner block if scrolling.
+
+                row_start = start_x if state.get('text_scroll', False) else (w - len(l)) // 2
+
                 for j, c in enumerate(l):
-                    dx = start_x + j
+                    dx = row_start + j
                     if 0 <= dx < w:
                         if c != " ":
                             cbf[line_y][dx] = (WHITE, BLACK)
