@@ -330,7 +330,7 @@ class Renderer:
                          cur_fg = cur_fg[idx]
 
                      if y < len(cur_fg) and x < len(cur_fg[y]):
-                         final_rgb = cur_fg[y][x][1]
+                         final_rgb = cur_fg[y][x]
 
                 if style_mode == 1: # Block
                     cbf[y][x] = (WHITE, final_rgb) # BG color
