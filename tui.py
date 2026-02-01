@@ -166,6 +166,7 @@ class PyVizController(App):
         yield Header()
 
         with TabbedContent():
+            # TAB 1: Main (Audio, Sens, Theme)
             with TabPane("Main", id="tab_main"):
                 with Vertical(classes="box"):
                     yield Label("Audio Source")
@@ -186,7 +187,10 @@ class PyVizController(App):
                     ui_opts = [(k, k) for k in UI_THEMES.keys()]
                     yield Select(ui_opts, id="ui_theme_select", value="Default", tooltip="Theme for this settings window")
 
-            with TabPane("Visuals", id="tab_visuals"):
+                yield Button("RESET TO DEFAULTS", id="reset_btn", variant="error", tooltip="Reset all settings to factory defaults")
+
+            # TAB 2: Bars (Styles, Mirror, Physics for bars)
+            with TabPane("Bars", id="tab_bars"):
                 with ScrollableContainer():
                     with Vertical(classes="box"):
                         yield Label("Visual Style")
@@ -200,63 +204,32 @@ class PyVizController(App):
                         yield Input(value="  ▂▃▄▅▆▇█", id="bar_chars_input", tooltip="Custom characters for bars (from low to high volume)")
 
                         with Horizontal(classes="control-row"):
-                            yield Label("Show Stars", classes="control-label")
-                            yield Switch(value=True, id="stars_switch", tooltip="Enable background starfield effect")
+                            yield Label("Mirror Mode", classes="control-label")
+                            yield Switch(value=False, id="mirror_switch", tooltip="Mirror the visualization horizontally")
 
                         with Horizontal(classes="control-row"):
                             yield Label("Show Peaks", classes="control-label")
                             yield Switch(value=True, id="peaks_switch", tooltip="Show falling peak indicators")
 
-                        with Horizontal(classes="control-row"):
-                            yield Label("Mirror Mode", classes="control-label")
-                            yield Switch(value=False, id="mirror_switch", tooltip="Mirror the visualization horizontally")
-
                     with Vertical(classes="box"):
-                        yield Label("Physics Settings")
-
-                        yield Label("Gravity")
-                        with Horizontal(classes="adjust-row"):
-                            yield Button("-", id="grav_down", classes="adjust-btn")
-                            yield Input(value="0.25", id="grav_input", classes="adjust-input")
-                            yield Button("+", id="grav_up", classes="adjust-btn")
-
-                        yield Label("Smoothing")
-                        with Horizontal(classes="adjust-row"):
-                            yield Button("-", id="smooth_down", classes="adjust-btn")
-                            yield Input(value="0.15", id="smooth_input", classes="adjust-input")
-                            yield Button("+", id="smooth_up", classes="adjust-btn")
-
-                        yield Label("Noise Floor (dB)")
-                        yield Input(value="-60.0", id="noise_input", classes="adjust-input")
-
-                        yield Label("Auto Gain")
-                        yield Switch(value=True, id="gain_switch")
-
-            with TabPane("Advanced", id="tab_adv"):
-                with ScrollableContainer():
-                    with Vertical(classes="box"):
-                        yield Label("Advanced Audio")
+                        yield Label("Bar Physics")
                         yield Label("Rise Speed")
                         yield Input(value="0.6", id="rise_input", classes="adjust-input", tooltip="How fast bars react to sound (0.0-1.0)")
 
                         yield Label("Bass Threshold")
                         yield Input(value="0.7", id="bass_input", classes="adjust-input", tooltip="Frequency cutoff for bass detection")
 
-                    with Vertical(classes="box"):
-                        yield Label("Advanced Visuals")
                         yield Label("Peak Gravity")
                         yield Input(value="0.15", id="peak_grav_input", classes="adjust-input", tooltip="How fast peak indicators fall")
 
-                        yield Label("Glitch Intensity")
-                        yield Input(value="0.0", id="glitch_input", classes="adjust-input", tooltip="Random visual glitch effect intensity")
-
-                        yield Label("Target FPS")
-                        yield Input(value="30", id="fps_input", classes="adjust-input", tooltip="Target Frames Per Second (default 30)")
-
-                    yield Button("RESET TO DEFAULTS", id="reset_btn", variant="error", tooltip="Reset all settings to factory defaults")
-
-            with TabPane("Images", id="tab_images"):
+            # TAB 3: Background (Images, Stars)
+            with TabPane("Background", id="tab_bg"):
                 with ScrollableContainer():
+                    with Vertical(classes="box"):
+                        with Horizontal(classes="control-row"):
+                            yield Label("Show Stars", classes="control-label")
+                            yield Switch(value=True, id="stars_switch", tooltip="Enable background starfield effect")
+
                     with Vertical(classes="box"):
                         yield Label("Background Image")
                         with Horizontal():
@@ -295,6 +268,39 @@ class PyVizController(App):
                         with Horizontal(classes="control-row"):
                             yield Label("Flip", classes="control-label")
                             yield Switch(value=False, id="fg_img_flip")
+
+            # TAB 4: Effects (Global Physics, Glitch, FPS)
+            with TabPane("Effects", id="tab_effects"):
+                with ScrollableContainer():
+                    with Vertical(classes="box"):
+                        yield Label("Global Physics")
+
+                        yield Label("Gravity")
+                        with Horizontal(classes="adjust-row"):
+                            yield Button("-", id="grav_down", classes="adjust-btn")
+                            yield Input(value="0.25", id="grav_input", classes="adjust-input")
+                            yield Button("+", id="grav_up", classes="adjust-btn")
+
+                        yield Label("Smoothing")
+                        with Horizontal(classes="adjust-row"):
+                            yield Button("-", id="smooth_down", classes="adjust-btn")
+                            yield Input(value="0.15", id="smooth_input", classes="adjust-input")
+                            yield Button("+", id="smooth_up", classes="adjust-btn")
+
+                        yield Label("Noise Floor (dB)")
+                        yield Input(value="-60.0", id="noise_input", classes="adjust-input")
+
+                        yield Label("Auto Gain")
+                        yield Switch(value=True, id="gain_switch")
+
+                    with Vertical(classes="box"):
+                        yield Label("Post Processing")
+
+                        yield Label("Glitch Intensity")
+                        yield Input(value="0.0", id="glitch_input", classes="adjust-input", tooltip="Random visual glitch effect intensity")
+
+                        yield Label("Target FPS")
+                        yield Input(value="30", id="fps_input", classes="adjust-input", tooltip="Target Frames Per Second (default 30)")
 
             with TabPane("Text & AFK", id="tab_text"):
                 with ScrollableContainer():
