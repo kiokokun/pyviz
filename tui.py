@@ -204,6 +204,13 @@ class PyVizController(App):
                             yield Label("Flip", classes="control-label")
                             yield Switch(value=False, id="bg_img_flip")
 
+                        yield Label("Image Style")
+                        yield Select([("Char", "2"), ("Block", "1")], id="img_style_select")
+
+                        yield Label("Image Char Set")
+                        char_opts = [(k, k) for k in CHAR_SETS.keys()]
+                        yield Select(char_opts, id="img_preset_select")
+
                     with Vertical(classes="box"):
                         yield Label("Foreground Image (Texture)")
                         with Horizontal():
@@ -308,6 +315,10 @@ class PyVizController(App):
         self.query_one("#bg_img_path", Input).value = self.state.get('img_bg_path', '')
         self.query_one("#bg_img_switch", Switch).value = self.state.get('img_bg_on', False)
         self.query_one("#bg_img_flip", Switch).value = self.state.get('img_bg_flip', False)
+
+        self.query_one("#img_style_select", Select).value = str(self.state.get('img_style', 2))
+        self.query_one("#img_preset_select", Select).value = self.state.get('img_char_set', 'Blocks')
+
         self.query_one("#fg_img_path", Input).value = self.state.get('img_fg_path', '')
         self.query_one("#fg_img_switch", Switch).value = self.state.get('img_fg_on', False)
         self.query_one("#fg_img_flip", Switch).value = self.state.get('img_fg_flip', False)
@@ -402,6 +413,10 @@ class PyVizController(App):
             # Value is the chars themselves
             self.state['bar_chars'] = str(val)
             self.query_one("#bar_chars_input", Input).value = str(val)
+        elif sid == "img_style_select":
+            self.state['img_style'] = int(val)
+        elif sid == "img_preset_select":
+            self.state['img_char_set'] = str(val)
 
         self.save_state()
 

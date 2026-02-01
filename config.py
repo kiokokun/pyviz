@@ -15,7 +15,8 @@ DEFAULT_STATE = {
     "text_scroll": False, "text_glitch": False, "text_pos_y": 0.5,
     "afk_enabled": True, "afk_timeout": 30, "afk_text": "brb", "force_afk": False,
     "img_bg_path": "", "img_bg_on": False, "img_bg_flip": False,
-    "img_fg_path": "", "img_fg_on": False, "img_fg_flip": False
+    "img_fg_path": "", "img_fg_on": False, "img_fg_flip": False,
+    "img_char_set": "Blocks", "img_style": 2
 }
 
 CHAR_SETS = {
